@@ -2,12 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dashboard • ScheduleSync</title>
+  <title>Dashboard · ScheduleSync</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body style="font-family:system-ui; margin:2rem">
-  <h1>📊 Dashboard</h1>
-  <p>If you can see this, static serving works.</p>
-  <p><a href="/team-management">Team Management</a> • <a href="/booking">Public Booking</a></p>
+<body class="bg-slate-50">
+  <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex gap-4">
+      <span class="font-semibold">📊 Dashboard</span>
+      <a href="/team-management" class="hover:underline">👥 Team Management</a>
+      <a href="/booking" class="hover:underline">📖 Public Booking</a>
+    </div>
+  </nav>
+
+  <main class="max-w-3xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-2">Dashboard</h1>
+    <p class="text-slate-600">Static page at <code>/public/dashboard.html</code>.</p>
+  </main>
 </body>
 </html>
