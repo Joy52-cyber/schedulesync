@@ -143,10 +143,6 @@ async function createTestUser() {
     console.error('⚠️ Could not create test user:', error.message);
   }
 }
-  } catch (error) {
-    console.error('❌ Database init error:', error.message);
-  }
-}
 
 app.get('/', (req, res) => {
   res.send('ScheduleSync API Running');
