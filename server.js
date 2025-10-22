@@ -7,10 +7,24 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const { Resend } = require('resend');
-const { google } = require('googleapis');
 const path = require('path');
 require('dotenv').config();
+
+// Optional packages (may not be installed)
+let Resend = null;
+let google = null;
+try {
+  const resend = require('resend');
+  Resend = resend.Resend;
+} catch (e) {
+  console.log('⚠️  Resend email service not configured');
+}
+try {
+  const googleapis = require('googleapis');
+  google = googleapis.google;
+} catch (e) {
+  console.log('⚠️  Google Calendar API not configured');
+}
 
 // ========================
 // INITIALIZATION
@@ -80,13 +94,15 @@ pool.on('error', (err) => {
 
 let oauth2Client = null;
 
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+if (google && GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   oauth2Client = new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     GOOGLE_CALLBACK_URL
   );
   console.log('✅ Google OAuth client initialized');
+} else if (!google) {
+  console.log('⚠️  Google Calendar API not available (googleapis not installed)');
 }
 
 // ========================
@@ -509,7 +525,7 @@ app.get('/api/calendar/availability/:teamId', authenticate, async (req, res) => 
         [member.id, 'google']
       );
 
-      if (googleCalResult.rows.length > 0) {
+      if (googleCalResult.rows.length > 0 && oauth2Client) {
         const calConnection = googleCalResult.rows[0];
 
         try {
