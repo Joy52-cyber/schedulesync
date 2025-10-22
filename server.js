@@ -57,17 +57,19 @@ pool.on('error', (err) => {
 });
 
 // ========================
-// EMAIL SETUP (SENDGRID)
+// EMAIL SETUP (RESEND)
 // ========================
 
+const { Resend } = require('resend');
+let resend = null;
 let emailEnabled = false;
 
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
   emailEnabled = true;
-  console.log('✅ SendGrid email service configured');
+  console.log('✅ Resend email service configured');
 } else {
-  console.log('⚠️ SendGrid API key not configured (email disabled)');
+  console.log('⚠️ Resend API key not configured (email disabled)');
 }
 
 // ========================
@@ -83,13 +85,12 @@ async function sendEmail(to, subject, html, text) {
   try {
     console.log(`📧 Sending email to: ${to}`);
     
-    await sgMail.send({
+    await resend.emails.send({
+      from: 'ScheduleSync <onboarding@resend.dev>',
       to,
-      from: SENDER_EMAIL,
       subject,
       html,
-      text,
-      replyTo: SENDER_EMAIL
+      text
     });
 
     console.log(`✅ Email sent successfully to: ${to}`);
