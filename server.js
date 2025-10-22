@@ -1,194 +1,313 @@
-﻿// server.js — ScheduleSync (clean mock backend)
-require("dotenv").config();
-const express = require("express");
-const path = require("path");
-const cors = require("cors");
+﻿// ScheduleSync - Minimal Working Version
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const path = require('path');
+require('dotenv').config();
 
-// ----------------------------------------------------------------------------
-// App setup
-// ----------------------------------------------------------------------------
 const app = express();
-const PORT = process.env.PORT || 8080;
-const NODE_ENV = process.env.NODE_ENV || "production"; // default to prod for Railway
-const PUBLIC_DIR = path.join(__dirname, "public");
-
-// basic middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// tiny request logger (useful on Railway logs)
-app.use((req, _res, next) => {
-  console.log(`${new Date().toISOString()}  ${req.method} ${req.url}`);
-  next();
-});
+const PORT = process.env.PORT || 8080;
+const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret';
+const DATABASE_URL = process.env.DATABASE_URL;
 
-// ----------------------------------------------------------------------------
-// Static hosting
-// ----------------------------------------------------------------------------
-app.use(express.static(PUBLIC_DIR));
+console.log('Starting ScheduleSync...');
+console.log('DATABASE_URL exists:', !!DATABASE_URL);
+console.log('PORT:', PORT);
 
-// redirect ".htm" → ".html"
-app.use((req, res, next) => {
-  if (req.path.toLowerCase().endsWith(".htm")) {
-    return res.redirect(301, req.path + "l");
-  }
-  next();
-});
-
-// pretty routes for your pages
-app.get(["/", "/dashboard", "/dashboard.html"], (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
-});
-app.get(["/booking", "/booking.html", "/booking.htm"], (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "booking.html"));
-});
-app.get(["/team-management", "/team-management.html"], (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "team-management.html"));
-});
-
-// ----------------------------------------------------------------------------
-// Health
-// ----------------------------------------------------------------------------
-const emailEnv = {
-  user: process.env.EMAIL_USER || "",
-  pass: process.env.EMAIL_PASSWORD || "",
-  service: process.env.EMAIL_SERVICE || "",
-};
-const emailConfigured = Boolean(emailEnv.user && emailEnv.pass);
-
-// Health (includes emailConfigured flag)
-app.get("/health", (_req, res) => {
-  const emailConfigured = Boolean(
-    (process.env.EMAIL_USER || "") && (process.env.EMAIL_PASSWORD || "")
-  );
-  res.json({
-    status: "ok",
-    env: process.env.NODE_ENV || "production",
-    db: "mock",
-    emailConfigured,
-    time: new Date().toISOString(),
-  });
-});
-
-
-// ----------------------------------------------------------------------------
-// Mock API (keeps the UI working without a real database)
-// ----------------------------------------------------------------------------
-const MOCK_TEAMS = [
-  {
-    id: 1,
-    name: "Engineering Team",
-    public_url: "team-eng",
-    scheduling_mode: "round_robin",
-    member_count: 3,
-    description: "Handles product and platform.",
-  },
-  {
-    id: 2,
-    name: "Sales Team",
-    public_url: "team-sales",
-    scheduling_mode: "collective",
-    member_count: 2,
-    description: "Talks to customers.",
-  },
-];
-
-app.get("/api/teams", (_req, res) => {
-  res.json({ teams: MOCK_TEAMS });
-});
-
-app.get("/api/teams/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const team = MOCK_TEAMS.find((t) => t.id === id);
-  if (!team) return res.status(404).json({ ok: false, message: "Team not found" });
-  res.json({
-    team,
-    members: [
-      { id: 101, email: "alice@example.com", role: "admin" },
-      { id: 102, email: "bob@example.com", role: "member" },
-    ],
-    userRole: "admin",
-  });
-});
-
-app.post("/api/auth/register", (req, res) => {
-  const email = req.body?.email || "demo@schedulesync.dev";
-  const name = req.body?.name || "Demo User";
-  res.json({
-    ok: true,
-    message: "Demo register successful (no real account created)",
-    token: "demo.jwt.token",
-    user: { id: Date.now(), email, name },
-  });
-});
-
-// ----------------------------------------------------------------------------
-// Email test (non-blocking; never hangs)
-// - GET  /api/email/test?to=someone@example.com
-// - POST /api/email/test { "to": "someone@example.com" }
-// If EMAIL_USER + EMAIL_PASSWORD exist, tries SMTP; else simulates success.
-// ----------------------------------------------------------------------------
-app.all("/api/email/test", async (req, res) => {
+// Database connection
+let pool = null;
+if (DATABASE_URL) {
   try {
-    const to =
-      (req.method === "GET" ? req.query?.to : req.body?.to) ||
-      process.env.TEST_RECIPIENT ||
-      "";
-
-    if (!to || !String(to).includes("@")) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'Provide recipient via ?to=someone@example.com' });
-    }
-
-    // If no SMTP creds, simulate success quickly (so Railway doesn't 502)
-    if (!emailConfigured) {
-      console.log(`[EMAIL:SIMULATED] to=${to}`);
-      return res.json({
-        ok: true,
-        simulated: true,
-        message:
-          "Email service not configured; simulated success. Set EMAIL_USER and EMAIL_PASSWORD to send real emails.",
-      });
-    }
-
-    // Try real send (Gmail/SMTP)
-    const nodemailer = require("nodemailer");
-    const transporter = nodemailer.createTransport({
-      service: emailEnv.service || "gmail",
-      auth: { user: emailEnv.user, pass: emailEnv.pass },
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
     });
-
-    const info = await transporter.sendMail({
-      from: `ScheduleSync <${emailEnv.user}>`,
-      to,
-      subject: "ScheduleSync Test Email",
-      text: "This is a test email from ScheduleSync.",
-      html: `<p>This is a <b>test email</b> from ScheduleSync.</p>`,
+    
+    pool.query('SELECT NOW()', (err) => {
+      if (err) {
+        console.error('❌ DB Error:', err.message);
+      } else {
+        console.log('✅ Database connected');
+      }
     });
+  } catch (e) {
+    console.error('Failed to create pool:', e.message);
+  }
+} else {
+  console.warn('⚠️ No DATABASE_URL - using mock mode');
+}
 
-    console.log(`[EMAIL:SENT] to=${to} id=${info?.messageId}`);
-    return res.json({ ok: true, simulated: false, messageId: info?.messageId || null });
-  } catch (err) {
-    console.error("Email test error:", err?.message);
-    // Return a safe JSON error (do not hang)
-    return res
-      .status(500)
-      .json({ ok: false, message: "Email send failed", error: String(err?.message || err) });
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Health check
+app.get('/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  if (pool) {
+    try {
+      await pool.query('SELECT 1');
+      dbStatus = 'connected';
+    } catch (e) {
+      dbStatus = 'error';
+    }
+  }
+  
+  res.json({
+    status: 'ok',
+    database: dbStatus,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Auth register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const { email, name, extensionId } = req.body;
+    
+    const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    let user;
+    if (existing.rows.length > 0) {
+      user = existing.rows[0];
+      await pool.query('UPDATE users SET extension_id = $1 WHERE id = $2', [extensionId, user.id]);
+    } else {
+      const result = await pool.query(
+        'INSERT INTO users (email, name, extension_id) VALUES ($1, $2, $3) RETURNING *',
+        [email, name, extensionId]
+      );
+      user = result.rows[0];
+    }
+    
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (e) {
+    console.error('Register error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ----------------------------------------------------------------------------
-// 404 for unknown API routes (helps debugging)
-// ----------------------------------------------------------------------------
-app.use("/api", (_req, res) => {
-  res.status(404).json({ ok: false, message: "API route not found" });
+// Get teams
+app.get('/api/teams', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    const result = await pool.query(
+      `SELECT t.*, tm.role, (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count
+       FROM teams t
+       JOIN team_members tm ON t.id = tm.team_id
+       WHERE tm.user_id = $1
+       ORDER BY t.created_at DESC`,
+      [decoded.userId]
+    );
+    
+    res.json({ teams: result.rows });
+  } catch (e) {
+    console.error('Get teams error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// ----------------------------------------------------------------------------
-// Start server (0.0.0.0 for Railway)
-// ----------------------------------------------------------------------------
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ ScheduleSync mock API running on http://localhost:${PORT}`);
+// Create team
+app.post('/api/teams', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { name, schedulingMode } = req.body;
+    
+    const result = await pool.query(
+      `INSERT INTO teams (name, created_by, public_url, scheduling_mode, is_active, created_at)
+       VALUES ($1, $2, $3, $4, true, NOW())
+       RETURNING *`,
+      [name, decoded.userId, name.toLowerCase().replace(/\s+/g, '-'), schedulingMode || 'round_robin']
+    );
+    
+    const team = result.rows[0];
+    
+    await pool.query(
+      `INSERT INTO team_members (team_id, user_id, role, joined_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [team.id, decoded.userId, 'admin']
+    );
+    
+    res.json({ success: true, team });
+  } catch (e) {
+    console.error('Create team error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get team details
+app.get('/api/teams/:teamId', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { teamId } = req.params;
+    
+    const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
+    if (teamResult.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    
+    const membersResult = await pool.query(
+      `SELECT u.id, u.name, u.email, tm.role
+       FROM team_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.team_id = $1`,
+      [teamId]
+    );
+    
+    res.json({ team: teamResult.rows[0], members: membersResult.rows });
+  } catch (e) {
+    console.error('Get team error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add team member
+app.post('/api/teams/:teamId/members', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { teamId } = req.params;
+    const { userId, role } = req.body;
+    
+    await pool.query(
+      `INSERT INTO team_members (team_id, user_id, role, joined_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (team_id, user_id) DO NOTHING`,
+      [teamId, userId, role || 'member']
+    );
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Add member error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Booking endpoints
+app.get('/api/booking/team/:publicUrl', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const { publicUrl } = req.params;
+    
+    const teamResult = await pool.query(
+      'SELECT id, name, description, scheduling_mode FROM teams WHERE public_url = $1 AND is_active = true',
+      [publicUrl]
+    );
+    
+    if (teamResult.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    
+    const team = teamResult.rows[0];
+    const membersResult = await pool.query(
+      `SELECT u.id, u.name, u.email
+       FROM team_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.team_id = $1`,
+      [team.id]
+    );
+    
+    res.json({
+      team: {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        schedulingMode: team.scheduling_mode,
+        members: membersResult.rows
+      }
+    });
+  } catch (e) {
+    console.error('Get booking team error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/booking/availability/:teamId', async (req, res) => {
+  res.json({ availableSlots: generateSlots() });
+});
+
+app.post('/api/booking/create', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const { teamId, slotStart, slotEnd, guestEmail, guestName } = req.body;
+    
+    const result = await pool.query(
+      `INSERT INTO bookings (team_id, slot_start, slot_end, guest_email, guest_name, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+       RETURNING *`,
+      [teamId, slotStart, slotEnd, guestEmail, guestName]
+    );
+    
+    res.json({ success: true, booking: result.rows[0] });
+  } catch (e) {
+    console.error('Create booking error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/analytics/dashboard', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database not available' });
+    
+    const users = await pool.query('SELECT COUNT(*) as count FROM users');
+    const bookings = await pool.query('SELECT COUNT(*) as count FROM bookings');
+    
+    res.json({
+      stats: {
+        totalUsers: parseInt(users.rows[0].count),
+        totalBookings: parseInt(bookings.rows[0].count),
+        activeConnections: 0,
+        cacheHitRate: 85
+      }
+    });
+  } catch (e) {
+    console.error('Analytics error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Helper function
+function generateSlots() {
+  const slots = [];
+  const now = new Date();
+  for (let i = 1; i <= 10; i++) {
+    const start = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    slots.push({ start: start.toISOString(), end: end.toISOString() });
+  }
+  return slots;
+}
+
+// Serve HTML pages
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/team-management', (req, res) => res.sendFile(path.join(__dirname, 'public', 'team-management.html')));
+app.get('/booking.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`✅ Server listening on port ${PORT}`);
 });
