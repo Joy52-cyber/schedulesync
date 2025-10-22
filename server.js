@@ -168,7 +168,7 @@ const authenticate = (req, res, next) => {
 // STATIC FILES
 // ========================
 
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ========================
 // HEALTH CHECK
