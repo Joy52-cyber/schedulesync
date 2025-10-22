@@ -570,10 +570,10 @@ app.get('/api/config/status', (_req, res) => {
 app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/booking', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
-app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'teams.html')));
+app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-management.html')));
 app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'availability.html')));
-app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
-app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'bookings.html')));
+app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
+app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
 
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
