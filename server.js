@@ -142,6 +142,8 @@ app.post("/api/email/test", async (req, res) => {
 
 // --- Start server ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Listening on http://localhost:${PORT}`);
+const HOST = "0.0.0.0";               // <<< important on Railway
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Listening on http://${HOST}:${PORT}`);
 });
+
