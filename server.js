@@ -130,6 +130,44 @@ async function initDatabase() {
     `);
     console.log('  ✅ calendar_connections table');
     
+    // Add email column to calendar_connections if it doesn't exist
+    await pool.query(`
+      ALTER TABLE calendar_connections 
+      ADD COLUMN IF NOT EXISTS email VARCHAR(255)
+    `).catch(() => {});
+    
+    // Add last_synced column to calendar_connections if it doesn't exist
+    await pool.query(`
+      ALTER TABLE calendar_connections 
+      ADD COLUMN IF NOT EXISTS last_synced TIMESTAMP
+    `).catch(() => {});
+    
+    // Update bookings table to add more columns if needed
+    await pool.query(`
+      ALTER TABLE bookings 
+      ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)
+    `).catch(() => {});
+    
+    await pool.query(`
+      ALTER TABLE bookings 
+      ADD COLUMN IF NOT EXISTS attendee_id INTEGER REFERENCES users(id)
+    `).catch(() => {});
+    
+    await pool.query(`
+      ALTER TABLE bookings 
+      ADD COLUMN IF NOT EXISTS title VARCHAR(255)
+    `).catch(() => {});
+    
+    await pool.query(`
+      ALTER TABLE bookings 
+      ADD COLUMN IF NOT EXISTS start_time TIMESTAMP
+    `).catch(() => {});
+    
+    await pool.query(`
+      ALTER TABLE bookings 
+      ADD COLUMN IF NOT EXISTS end_time TIMESTAMP
+    `).catch(() => {});
+    
     dbReady = true;
     console.log('✅ Database schema ready');
     
@@ -156,6 +194,27 @@ async function createTestUser() {
   }
 }
 
+// Middleware to verify JWT token
+function authenticateToken(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// ============================================================================
+// BASIC ROUTES
+// ============================================================================
+
 app.get('/', (req, res) => {
   res.json({
     status: 'ScheduleSync API Running',
@@ -166,6 +225,10 @@ app.get('/', (req, res) => {
     }
   });
 });
+
+// ============================================================================
+// AUTHENTICATION ROUTES
+// ============================================================================
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -243,20 +306,251 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/users/me', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!token) {
-    return res.status(401).json({ error: 'No token' });
-  }
-  
+app.get('/api/users/me', authenticateToken, async (req, res) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ user: { id: decoded.userId, name: 'User' } });
+    const result = await pool.query(
+      'SELECT id, name, email FROM users WHERE id = $1',
+      [req.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user: result.rows[0] });
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+    console.error('Get user error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
+
+// ============================================================================
+// ANALYTICS & DASHBOARD ENDPOINTS
+// ============================================================================
+
+app.get('/api/analytics/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    const analytics = {
+      totalBookings: 0,
+      upcomingMeetings: 0,
+      completedMeetings: 0,
+      teamMembers: 0,
+      recentActivity: []
+    };
+
+    // Get total bookings
+    const bookingsResult = await pool.query(
+      'SELECT COUNT(*) as count FROM bookings WHERE user_id = $1',
+      [userId]
+    );
+    analytics.totalBookings = parseInt(bookingsResult.rows[0]?.count || 0);
+
+    // Get upcoming meetings
+    const upcomingResult = await pool.query(
+      'SELECT COUNT(*) as count FROM bookings WHERE user_id = $1 AND start_time > NOW() AND status = $2',
+      [userId, 'confirmed']
+    );
+    analytics.upcomingMeetings = parseInt(upcomingResult.rows[0]?.count || 0);
+
+    // Get completed meetings
+    const completedResult = await pool.query(
+      'SELECT COUNT(*) as count FROM bookings WHERE user_id = $1 AND end_time < NOW()',
+      [userId]
+    );
+    analytics.completedMeetings = parseInt(completedResult.rows[0]?.count || 0);
+
+    // Get team members count
+    const teamResult = await pool.query(
+      'SELECT COUNT(DISTINCT tm.user_id) as count FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE t.owner_id = $1',
+      [userId]
+    );
+    analytics.teamMembers = parseInt(teamResult.rows[0]?.count || 0);
+
+    // Get recent activity
+    const activityResult = await pool.query(
+      `SELECT b.id, b.title, b.start_time, b.end_time, b.status, u.name as attendee_name
+       FROM bookings b
+       LEFT JOIN users u ON b.attendee_id = u.id
+       WHERE b.user_id = $1
+       ORDER BY b.created_at DESC
+       LIMIT 10`,
+      [userId]
+    );
+    analytics.recentActivity = activityResult.rows;
+
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// ============================================================================
+// CALENDAR INTEGRATION ENDPOINTS
+// ============================================================================
+
+// Get Calendar Connections
+app.get('/api/calendar/connections', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    const result = await pool.query(
+      `SELECT id, provider, email, is_active, created_at, last_synced
+       FROM calendar_connections
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    res.json({ connections: result.rows });
+  } catch (error) {
+    console.error('Error fetching calendar connections:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar connections' });
+  }
+});
+
+// Google OAuth Auth URL
+app.get('/api/calendar/google/auth', authenticateToken, (req, res) => {
+  const googleClientId = GOOGLE_CLIENT_ID;
+  const redirectUri = `${process.env.BASE_URL || 'https://schedulesync-production.up.railway.app'}/api/calendar/google/callback`;
+  
+  if (!googleClientId || googleClientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+    return res.status(400).json({ 
+      error: 'Google Calendar not configured',
+      configured: false
+    });
+  }
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${encodeURIComponent(googleClientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent('https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events')}` +
+    `&access_type=offline` +
+    `&prompt=consent` +
+    `&state=${req.userId}`;
+
+  res.json({ 
+    authUrl,
+    configured: true
+  });
+});
+
+// Microsoft OAuth Auth URL
+app.get('/api/calendar/microsoft/auth', authenticateToken, (req, res) => {
+  const microsoftClientId = MICROSOFT_CLIENT_ID;
+  const redirectUri = `${process.env.BASE_URL || 'https://schedulesync-production.up.railway.app'}/api/calendar/microsoft/callback`;
+  
+  if (!microsoftClientId || microsoftClientId === 'YOUR_MICROSOFT_CLIENT_ID_HERE') {
+    return res.status(400).json({ 
+      error: 'Microsoft Calendar not configured',
+      configured: false
+    });
+  }
+
+  const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?` +
+    `client_id=${encodeURIComponent(microsoftClientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent('offline_access Calendars.ReadWrite')}` +
+    `&response_mode=query` +
+    `&state=${req.userId}`;
+
+  res.json({ 
+    authUrl,
+    configured: true
+  });
+});
+
+// Google OAuth Callback
+app.get('/api/calendar/google/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code) {
+    return res.redirect('/dashboard?error=google_auth_failed');
+  }
+
+  try {
+    // TODO: Exchange code for access token
+    // TODO: Store token in database
+    // TODO: Fetch user's calendar info
+    
+    // For now, just redirect back with success message
+    console.log('Google OAuth callback received, code:', code.substring(0, 20) + '...');
+    res.redirect('/dashboard?success=google_connected');
+  } catch (error) {
+    console.error('Google OAuth callback error:', error);
+    res.redirect('/dashboard?error=google_auth_failed');
+  }
+});
+
+// Microsoft OAuth Callback
+app.get('/api/calendar/microsoft/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code) {
+    return res.redirect('/dashboard?error=microsoft_auth_failed');
+  }
+
+  try {
+    // TODO: Exchange code for access token
+    // TODO: Store token in database
+    // TODO: Fetch user's calendar info
+    
+    // For now, just redirect back with success message
+    console.log('Microsoft OAuth callback received, code:', code.substring(0, 20) + '...');
+    res.redirect('/dashboard?success=microsoft_connected');
+  } catch (error) {
+    console.error('Microsoft OAuth callback error:', error);
+    res.redirect('/dashboard?error=microsoft_auth_failed');
+  }
+});
+
+// Disconnect Calendar
+app.delete('/api/calendar/connections/:id', authenticateToken, async (req, res) => {
+  try {
+    const connectionId = req.params.id;
+    const userId = req.userId;
+
+    await pool.query(
+      'DELETE FROM calendar_connections WHERE id = $1 AND user_id = $2',
+      [connectionId, userId]
+    );
+
+    res.json({ success: true, message: 'Calendar disconnected' });
+  } catch (error) {
+    console.error('Error disconnecting calendar:', error);
+    res.status(500).json({ error: 'Failed to disconnect calendar' });
+  }
+});
+
+// Configuration Status
+app.get('/api/config/status', (req, res) => {
+  const microsoftConfigured = !!(MICROSOFT_CLIENT_ID && 
+    MICROSOFT_CLIENT_ID !== 'YOUR_MICROSOFT_CLIENT_ID_HERE');
+  const googleConfigured = !!(GOOGLE_CLIENT_ID && 
+    GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE');
+
+  res.json({
+    microsoft: {
+      configured: microsoftConfigured,
+      clientId: microsoftConfigured ? '✓ Set' : '✗ Not set'
+    },
+    google: {
+      configured: googleConfigured,
+      clientId: googleConfigured ? '✓ Set' : '✗ Not set'
+    },
+    database: {
+      connected: dbReady
+    }
+  });
+});
+
+// ============================================================================
+// STATIC PAGE ROUTES
+// ============================================================================
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -270,9 +564,17 @@ app.get('/booking', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'booking.html'));
 });
 
+// ============================================================================
+// 404 HANDLER
+// ============================================================================
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+// ============================================================================
+// START SERVER
+// ============================================================================
 
 app.listen(PORT, () => {
   console.log(`📡 Listening on http://localhost:${PORT}`);
