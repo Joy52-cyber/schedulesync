@@ -193,7 +193,7 @@ app.get('/health', async (req, res) => {
 // ========================
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+  res.redirect('/dashboard');
 });
 
 app.get('/dashboard', (req, res) => {
@@ -202,10 +202,6 @@ app.get('/dashboard', (req, res) => {
 
 app.get('/team-management', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'team-management.html'));
-});
-
-app.get('/booking.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'booking.html'));
 });
 
 // ========================
