@@ -74,6 +74,12 @@ async function initDatabase() {
       )
     `);
     console.log('  ✅ teams table');
+
+    // Ensure owner_id column exists for legacy databases
+    await pool.query(`
+      ALTER TABLE teams
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id)
+    `).catch(() => {});
     
     await pool.query(`
       CREATE TABLE IF NOT EXISTS team_members (
