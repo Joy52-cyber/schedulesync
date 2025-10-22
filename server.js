@@ -9,12 +9,24 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-2025';
 
+// OAuth Credentials (hardcoded for now)
+const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID || 'c3bb1864-422d-4fa8-8701-27f7b903d1e9';
+const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET || 'bcc558ea-c38d-41d8-8bfe-0551b78877ae';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '1046899819143-hnebgn1jti2ec2j8v1e25sn6vuae961e.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
 console.log('🚀 ScheduleSync API Starting...');
 console.log(`📡 Listening on port ${PORT}`);
+console.log(`\n📋 Environment Variables Check:`);
+console.log(`  MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
+console.log(`  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
+console.log(`  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
+console.log(`  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
+console.log();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -145,7 +157,14 @@ async function createTestUser() {
 }
 
 app.get('/', (req, res) => {
-  res.send('ScheduleSync API Running');
+  res.json({
+    status: 'ScheduleSync API Running',
+    config: {
+      microsoftConfigured: !!MICROSOFT_CLIENT_ID,
+      googleConfigured: !!GOOGLE_CLIENT_ID,
+      databaseReady: dbReady
+    }
+  });
 });
 
 app.post('/api/auth/signup', async (req, res) => {
