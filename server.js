@@ -63,8 +63,10 @@ if (DATABASE_URL) {
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 const EMAIL_SERVICE = process.env.EMAIL_SERVICE || 'gmail';
+const APP_URL = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
 
 let transporter = null;
+let emailEnabled = false;
 
 if (EMAIL_USER && EMAIL_PASSWORD) {
   transporter = nodemailer.createTransport({
@@ -80,10 +82,119 @@ if (EMAIL_USER && EMAIL_PASSWORD) {
       console.warn('⚠️ Email not configured:', error.message);
     } else {
       console.log('✅ Email service ready');
+      emailEnabled = true;
     }
   });
 } else {
   console.warn('⚠️ Email credentials not configured');
+}
+
+// Email helper function
+async function sendEmail(to, subject, html) {
+  if (!emailEnabled || !transporter) {
+    console.log('📧 Email skipped (not configured):', to);
+    return false;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `ScheduleSync <${EMAIL_USER}>`,
+      to,
+      subject,
+      html
+    });
+    console.log(`✅ Email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Email send error:', error.message);
+    return false;
+  }
+}
+
+// Email templates
+function getTeamInviteEmail(inviteeEmail, inviterName, teamName) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0;">ScheduleSync</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Welcome to ${teamName}!</h2>
+        <p style="color: #4a5568; font-size: 16px;">Hi ${inviteeEmail.split('@')[0]},</p>
+        <p style="color: #4a5568; font-size: 16px;"><strong>${inviterName}</strong> has invited you to join <strong>${teamName}</strong> on ScheduleSync.</p>
+        <p style="color: #4a5568; margin-top: 20px;">You can now access the team management dashboard and start scheduling meetings.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${APP_URL}/dashboard" style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Go to Dashboard</a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getBookingConfirmationEmail(guestName, teamName, slotStart, slotEnd, meetingLink) {
+  const start = new Date(slotStart);
+  const end = new Date(slotEnd);
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0;">Booking Confirmed</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Thank you, ${guestName}!</h2>
+        <p style="color: #4a5568;">Your booking with <strong>${teamName}</strong> has been confirmed.</p>
+        <div style="background: white; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+          <p style="margin: 0 0 10px 0;"><strong>Duration:</strong> ${Math.round((end - start) / 60000)} minutes</p>
+          <p style="margin: 0 0 10px 0;"><strong>Team:</strong> ${teamName}</p>
+          ${meetingLink ? `<p style="margin: 0;"><strong>Meeting Link:</strong> <a href="${meetingLink}">${meetingLink}</a></p>` : ''}
+        </div>
+        <p style="color: #4a5568; font-size: 14px;">Check your email for additional details.</p>
+      </div>
+    </div>
+  `;
+}
+
+function getBookingCancellationEmail(guestName, teamName, slotStart) {
+  const start = new Date(slotStart);
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0;">Booking Cancelled</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <p style="color: #4a5568; font-size: 16px;">Hi ${guestName},</p>
+        <p style="color: #4a5568; font-size: 16px;">Your booking with <strong>${teamName}</strong> has been cancelled.</p>
+        <div style="background: white; border-left: 4px solid #dc2626; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Original Date & Time:</strong> ${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        </div>
+        <p style="color: #4a5568;">If you need to reschedule, please visit the booking page to select a new time.</p>
+      </div>
+    </div>
+  `;
+}
+
+function getNewBookingNotificationEmail(memberName, guestName, teamName, slotStart, slotEnd) {
+  const start = new Date(slotStart);
+  const end = new Date(slotEnd);
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0;">New Booking</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Hi ${memberName},</h2>
+        <p style="color: #4a5568; font-size: 16px;"><strong>${guestName}</strong> has booked a meeting with your team <strong>${teamName}</strong>.</p>
+        <div style="background: white; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Guest:</strong> ${guestName}</p>
+          <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+          <p style="margin: 0;"><strong>Duration:</strong> ${Math.round((end - start) / 60000)} minutes</p>
+        </div>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${APP_URL}/dashboard" style="background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Booking</a>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ========================
@@ -291,12 +402,26 @@ app.post('/api/teams/:teamId/members', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Only admins can add members' });
     }
 
+    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [teamId]);
+    const inviterResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.userId]);
+    const inviteeResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+
     await pool.query(
       `INSERT INTO team_members (team_id, user_id, role, joined_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (team_id, user_id) DO NOTHING`,
       [teamId, userId, role || 'member']
     );
+
+    // Send invitation email
+    const teamName = teamResult.rows[0]?.name || 'Team';
+    const inviterName = inviterResult.rows[0]?.name || 'Team Admin';
+    const inviteeEmail = inviteeResult.rows[0]?.email;
+
+    if (inviteeEmail) {
+      const emailHtml = getTeamInviteEmail(inviteeEmail, inviterName, teamName);
+      await sendEmail(inviteeEmail, `You've been invited to join ${teamName} on ScheduleSync`, emailHtml);
+    }
 
     console.log(`✅ Member ${userId} added to team ${teamId}`);
     res.json({ success: true });
