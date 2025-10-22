@@ -1,115 +1,222 @@
-﻿================================================================================
-✅ PASSWORD COLUMN FIX - Add Missing Column
-================================================================================
+﻿const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const path = require('path');
+require('dotenv').config();
 
-Problem: Column "password" does not exist
+const app = express();
+const PORT = process.env.PORT || 8080;
+const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-2025';
 
-Solution: Added database migration to ADD the password column if missing!
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
 
-Now when server starts:
-  1. Checks if users table exists
-  2. If users table exists but password column is missing: ADD IT ✓
-  3. If password column already exists: SKIP (no error)
-  4. Result: password column always exists!
+console.log('🚀 ScheduleSync API Starting...');
+console.log(`📡 Listening on port ${PORT}`);
 
-================================================================================
-WHAT'S FIXED
-================================================================================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
-Added ALTER TABLE migration:
-  ALTER TABLE users ADD COLUMN password VARCHAR(255)
+let dbReady = false;
 
-This:
-  ✓ Runs automatically on server start
-  ✓ Only runs if column is missing (IF NOT EXISTS equivalent)
-  ✓ Doesn't fail if column already exists
-  ✓ Adds password with default value for existing users
+pool.query('SELECT NOW()', (err) => {
+  if (err) {
+    console.error('❌ Database connection failed:', err.message);
+  } else {
+    console.log('✅ Database connected');
+    initDatabase();
+  }
+});
 
-================================================================================
-DEPLOY NOW
-================================================================================
+async function initDatabase() {
+  try {
+    console.log('🔄 Initializing database...');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('  ✅ users table');
+    
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT 'temp'
+    `).catch(() => {});
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        owner_id INTEGER NOT NULL REFERENCES users(id),
+        public_url VARCHAR(255) UNIQUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('  ✅ teams table');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50) DEFAULT 'member',
+        joined_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(team_id, user_id)
+      )
+    `);
+    console.log('  ✅ team_members table');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS time_slots (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slot_start TIMESTAMP NOT NULL,
+        slot_end TIMESTAMP NOT NULL,
+        is_available BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('  ✅ time_slots table');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        slot_id INTEGER NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+        guest_name VARCHAR(255) NOT NULL,
+        guest_email VARCHAR(255) NOT NULL,
+        guest_notes TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('  ✅ bookings table');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS calendar_connections (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider VARCHAR(50) NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT,
+        token_expiry TIMESTAMP,
+        calendar_id VARCHAR(255),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, provider)
+      )
+    `);
+    console.log('  ✅ calendar_connections table');
+    
+    dbReady = true;
+    console.log('✅ Database schema ready\n');
+  } catch (error) {
+    console.error('❌ Database init error:', error.message);
+  }
+}
 
-Command Prompt:
+app.get('/', (req, res) => {
+  res.send('ScheduleSync API Running');
+});
 
-  git add server.js
-  git commit -m "Add password column migration"
-  git push
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      [name, email, password]
+    );
+    
+    const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
+    
+    res.json({
+      success: true,
+      token,
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Signup error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-That's it! ✓
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+    
+    const result = await pool.query(
+      'SELECT id, name, email FROM users WHERE email = $1 AND password = $2',
+      [email, password]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
+    
+    res.json({
+      success: true,
+      token,
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Login error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-================================================================================
-WHAT HAPPENS
-================================================================================
+app.get('/api/users/me', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    res.json({ user: { id: decoded.userId, name: 'User' } });
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
 
-1. Railway detects push
-2. Deploys new server.js
-3. Server starts
-4. Connects to database
-5. Checks/creates users table
-6. ADDS password column if missing ✓
-7. All other tables created
-8. Server ready! ✅
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
-Even if users table already existed WITHOUT password:
-  NOW it will have password column added!
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
 
-================================================================================
-THEN TEST
-================================================================================
+app.get('/booking', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'booking.html'));
+});
 
-Wait 1-2 minutes for deployment.
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 
-Check Railway logs - should see:
-  ✅ users table ready
-  ✅ Added missing password column to users table
-  ✅ calendar_connections table ready
-  ✅ Database schema initialized successfully
-
-Visit: https://schedulesync-production.up.railway.app/login
-
-Try to sign up:
-  Name: Test User
-  Email: test@example.com  
-  Password: anything
-
-Should work now! ✅
-
-No more "column password does not exist" error!
-
-================================================================================
-COMPLETE SEQUENCE
-================================================================================
-
-C:\...\schedulesync-extension>git add server.js
-
-C:\...\schedulesync-extension>git commit -m "Add password column migration"
-[main xyz123] Add password column migration
- 1 file changed, 25 insertions(+)
-
-C:\...\schedulesync-extension>git push
-
-[Wait 1-2 minutes]
-
-✅ Server starts
-✅ Tables created
-✅ Password column added
-✅ App ready
-
-Visit /login
-Sign up
-Dashboard works!
-
-SUCCESS! 🎉
-
-================================================================================
-TL;DR
-================================================================================
-
-1. git add server.js
-2. git commit -m "Add password column"
-3. git push
-4. Wait 1-2 minutes
-5. Visit /login
-6. Sign up - works! ✅
-
-================================================================================
+app.listen(PORT, () => {
+  console.log(`📡 Listening on http://localhost:${PORT}`);
+  console.log('✅ ScheduleSync API Running\n');
+});
