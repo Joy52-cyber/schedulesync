@@ -1,23 +1,398 @@
-﻿<!doctype html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Team Management · ScheduleSync</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Team Management • ScheduleSync</title>
+  <meta name="color-scheme" content="light dark" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --brand: #6366f1; }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    .modal { display:none }
+    .modal[open] { display:flex }
+  </style>
 </head>
-<body class="bg-slate-50">
-  <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex gap-4">
-      <a href="/dashboard" class="hover:underline">📊 Dashboard</a>
-      <span class="font-semibold">👥 Team Management</span>
-      <a href="/booking" class="hover:underline">📖 Public Booking</a>
-    </div>
-  </nav>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen text-slate-800">
+  <!-- Topbar -->
+  <header class="bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow">
+    <nav class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/dashboard" class="flex items-center gap-2 font-semibold">
+        <span class="text-2xl">📅</span><span>ScheduleSync</span>
+      </a>
+      <ul class="flex items-center gap-1 text-sm">
+        <li><a class="px-3 py-2 rounded hover:bg-white/10" href="/dashboard">Dashboard</a></li>
+        <li><a class="px-3 py-2 rounded hover:bg-white/10" href="/booking">Public Booking</a></li>
+        <li><a aria-current="page" class="px-3 py-2 rounded bg-white/15 font-semibold" href="/team-management">Team Management</a></li>
+      </ul>
+    </nav>
+  </header>
 
-  <main class="max-w-3xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-2">Team Management</h1>
-    <p class="text-slate-600">Static page at <code>/public/team-management.html</code>.</p>
+  <!-- Page -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Header row -->
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Team Management</h1>
+        <p class="text-slate-600">Create teams, invite members, and share a public booking link.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnNewTeam" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow">
+          + Create Team
+        </button>
+      </div>
+    </div>
+
+    <!-- Views -->
+    <section id="listView" class="space-y-6">
+      <!-- Skeleton while loading -->
+      <div id="teamsLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="h-40 bg-white rounded-xl shadow animate-pulse"></div>
+        <div class="h-40 bg-white rounded-xl shadow animate-pulse"></div>
+        <div class="h-40 bg-white rounded-xl shadow animate-pulse"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="teamsEmpty" class="hidden">
+        <div class="bg-white rounded-xl shadow p-12 text-center">
+          <p class="text-slate-600 mb-4">No teams yet.</p>
+          <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium" onclick="openNewTeam()">
+            Create your first team
+          </button>
+        </div>
+      </div>
+
+      <!-- Teams grid -->
+      <div id="teamsGrid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </section>
+
+    <section id="detailView" class="hidden space-y-6">
+      <button class="px-3 py-2 rounded-lg bg-white shadow hover:bg-slate-50 border" onclick="showList()">
+        ← Back to Teams
+      </button>
+
+      <div id="teamCard" class="bg-white rounded-xl shadow p-6"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Invite -->
+        <div class="bg-white rounded-xl shadow p-6">
+          <h3 class="text-lg font-semibold mb-4">Invite Member</h3>
+          <div class="space-y-3">
+            <input id="inviteEmail" type="email" placeholder="email@example.com"
+                   class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-200" />
+            <select id="inviteRole" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-200">
+              <option value="member" selected>Member</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+            </select>
+            <button id="btnInvite" class="w-full px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium">
+              Send Invite
+            </button>
+          </div>
+        </div>
+
+        <!-- Members -->
+        <div class="bg-white rounded-xl shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">Team Members</h3>
+            <span id="memberCount" class="text-sm text-slate-500"></span>
+          </div>
+          <div id="membersList" class="space-y-3">
+            <div class="h-10 bg-slate-100 rounded animate-pulse"></div>
+            <div class="h-10 bg-slate-100 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- New Team Modal -->
+  <dialog id="newTeamModal" class="modal fixed inset-0 items-center justify-center p-4 bg-black/40 backdrop:opacity-100">
+    <form method="dialog" class="max-w-md w-full bg-white rounded-xl shadow p-6 space-y-4" onsubmit="return false">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">Create Team</h3>
+        <button class="text-slate-500 hover:text-slate-700" onclick="closeNewTeam()">✕</button>
+      </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Team Name</label>
+        <input id="newTeamName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-200" placeholder="Sales Team" />
+      </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Scheduling Mode</label>
+        <select id="newTeamMode" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-200">
+          <option value="round_robin">Round Robin</option>
+          <option value="collective">Collective</option>
+          <option value="first_available">First Available</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button class="px-3 py-2 rounded-lg border" onclick="closeNewTeam()">Cancel</button>
+        <button id="btnCreateTeam" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium">
+          Create
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden px-4 py-2 rounded-lg bg-slate-900 text-white text-sm shadow"></div>
+
+  <script>
+    // ---------- Config ----------
+    const API_BASE = `${location.protocol}//${location.host}`;
+    const $ = (sel, el = document) => el.querySelector(sel);
+    const $$ = (sel, el = document) => el.querySelectorAll(sel);
+
+    // ---------- State ----------
+    let authToken = null;
+    let teams = [];
+    let activeTeamId = null;
+
+    // ---------- Utilities ----------
+    const toast = (msg, ms = 2200) => {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      clearTimeout(t._h);
+      t._h = setTimeout(() => t.classList.add('hidden'), ms);
+    };
+
+    async function fetchJSON(path, init = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(init.headers || {}) };
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
+      const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    async function ensureAuth() {
+      let token = localStorage.getItem('schedulesync_token');
+      if (!token) {
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'demo@schedulesync.com', name: 'Demo User', extensionId: 'web-team' })
+        });
+        const data = await res.json();
+        token = data.token;
+        localStorage.setItem('schedulesync_token', token);
+      }
+      authToken = token;
+    }
+
+    // ---------- Render: List ----------
+    function renderTeamsList() {
+      $('#teamsLoading').classList.add('hidden');
+
+      if (!teams.length) {
+        $('#teamsEmpty').classList.remove('hidden');
+        $('#teamsGrid').classList.add('hidden');
+        return;
+      }
+
+      $('#teamsEmpty').classList.add('hidden');
+      const grid = $('#teamsGrid');
+      grid.classList.remove('hidden');
+      grid.innerHTML = teams.map(t => {
+        const mode = (t.scheduling_mode || '').replaceAll('_', ' ').toUpperCase();
+        return `
+          <article class="bg-white rounded-xl shadow p-6 flex flex-col">
+            <h3 class="text-lg font-semibold">${escapeHTML(t.name)}</h3>
+            <p class="text-sm text-slate-600 mt-1">Mode: ${mode || '—'}</p>
+            <p class="text-sm text-slate-600">Members: ${t.member_count ?? 0}</p>
+
+            <div class="mt-4 p-3 rounded bg-slate-50">
+              <p class="text-xs text-slate-500">Public URL</p>
+              <p class="text-xs font-mono break-words">${escapeHTML(t.public_url)}</p>
+            </div>
+
+            <div class="mt-4 flex gap-2">
+              <button class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm"
+                      onclick="openTeam(${t.id})">View Details</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    // ---------- Render: Detail ----------
+    async function renderTeamDetail(teamId) {
+      const data = await fetchJSON(`/api/teams/${teamId}`);
+      const team = data.team;
+      const members = data.members || [];
+      const link = `${location.protocol}//${location.host}/booking?team=${encodeURIComponent(team.public_url)}`;
+
+      // header card
+      $('#teamCard').innerHTML = `
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold">${escapeHTML(team.name)}</h2>
+            <p class="text-slate-600">${escapeHTML(team.description || 'No description')}</p>
+            <div class="mt-2 flex gap-2">
+              <span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs">
+                ${(team.scheduling_mode || '').replaceAll('_', ' ').toUpperCase()}
+              </span>
+              <span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs">Public</span>
+            </div>
+          </div>
+          <button class="text-slate-500 hover:text-slate-700" title="Edit (coming soon)">✎</button>
+        </div>
+
+        <div class="mt-4">
+          <p class="text-sm font-medium mb-2">Public Booking Link</p>
+          <div class="flex items-center gap-2">
+            <input readonly value="${link}" class="flex-1 px-3 py-2 border rounded-lg bg-slate-50 font-mono text-xs" />
+            <button class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm"
+                    onclick="copyText('${link.replaceAll("'", "\\'")}')">Copy</button>
+          </div>
+        </div>
+      `;
+
+      // members
+      $('#memberCount').textContent = `${members.length} total`;
+      const list = $('#membersList');
+      if (!members.length) {
+        list.innerHTML = `<p class="text-slate-600">No members yet.</p>`;
+      } else {
+        list.innerHTML = members.map(m => `
+          <div class="flex items-center justify-between p-3 border rounded-lg">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white grid place-items-center text-sm font-bold">
+                ${escapeHTML((m.name || m.email || '?').slice(0,1).toUpperCase())}
+              </div>
+              <div>
+                <p class="font-medium text-sm">${escapeHTML(m.email || m.name || 'Member')}</p>
+                <p class="text-xs text-slate-500">${escapeHTML(m.role || 'member')}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <select class="text-sm border rounded px-2 py-1"
+                      onchange="changeRole(${m.id}, this.value)">
+                ${['admin','member','viewer'].map(r =>
+                  `<option value="${r}" ${m.role===r?'selected':''}>${r}</option>`).join('')}
+              </select>
+              <button class="text-sm px-2 py-1 border rounded hover:bg-red-50 text-red-600"
+                      onclick="removeMember(${m.id}, '${(m.email||'').replaceAll("'", "\\'")}')">Remove</button>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // ---------- Actions ----------
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => toast('Copied link'));
+    }
+
+    function showList() {
+      $('#detailView').classList.add('hidden');
+      $('#listView').classList.remove('hidden');
+      activeTeamId = null;
+    }
+
+    async function openTeam(id) {
+      activeTeamId = id;
+      $('#listView').classList.add('hidden');
+      $('#detailView').classList.remove('hidden');
+      await renderTeamDetail(id);
+    }
+
+    function openNewTeam() { $('#newTeamModal').setAttribute('open',''); }
+    function closeNewTeam() { $('#newTeamModal').removeAttribute('open'); }
+    window.openNewTeam = openNewTeam; // used by button
+
+    async function createTeam() {
+      const name = $('#newTeamName').value.trim();
+      const mode = $('#newTeamMode').value;
+      if (!name) return toast('Please enter a team name');
+
+      const publicUrl = name.toLowerCase().replace(/\s+/g, '-');
+      await fetchJSON('/api/teams', {
+        method: 'POST',
+        body: JSON.stringify({ name, schedulingMode: mode, publicUrl })
+      });
+
+      closeNewTeam();
+      toast('Team created');
+      await loadTeams();
+      renderTeamsList();
+    }
+
+    async function invite() {
+      const email = $('#inviteEmail').value.trim();
+      const role  = $('#inviteRole').value;
+      if (!email || !email.includes('@')) return toast('Enter a valid email');
+
+      // Upsert the user then add as member
+      const reg = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ email, name: email.split('@')[0], extensionId: 'web-invite' })
+      }).then(r => r.json());
+
+      await fetchJSON(`/api/teams/${activeTeamId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: reg.user.id, role })
+      });
+
+      $('#inviteEmail').value = '';
+      toast('Invitation sent');
+      await renderTeamDetail(activeTeamId);
+    }
+
+    async function changeRole(userId, role) {
+      try {
+        await fetchJSON(`/api/teams/${activeTeamId}/members/${userId}/role`, {
+          method: 'PUT',
+          body: JSON.stringify({ role })
+        });
+        toast('Role updated');
+      } catch (e) {
+        toast('Failed to update role');
+        await renderTeamDetail(activeTeamId); // reset UI
+      }
+    }
+
+    async function removeMember(userId, email) {
+      if (!confirm(`Remove ${email}?`)) return;
+      await fetchJSON(`/api/teams/${activeTeamId}/members/${userId}`, { method: 'DELETE' });
+      toast('Member removed');
+      await renderTeamDetail(activeTeamId);
+    }
+
+    // ---------- Data ----------
+    async function loadTeams() {
+      $('#teamsLoading').classList.remove('hidden');
+      $('#teamsGrid').classList.add('hidden');
+      $('#teamsEmpty').classList.add('hidden');
+
+      const res = await fetchJSON('/api/teams');
+      teams = res.teams || [];
+      $('#teamsLoading').classList.add('hidden');
+    }
+
+    // ---------- Helpers ----------
+    const escapeHTML = (s='') => s.replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+
+    // ---------- Wire up ----------
+    $('#btnNewTeam').addEventListener('click', openNewTeam);
+    $('#btnCreateTeam').addEventListener('click', createTeam);
+    $('#btnInvite').addEventListener('click', invite);
+
+    // ---------- Boot ----------
+    (async () => {
+      try {
+        await ensureAuth();
+        await loadTeams();
+        renderTeamsList();
+      } catch (e) {
+        console.error(e);
+        toast('Failed to load teams');
+      }
+    })();
+  </script>
 </body>
 </html>
