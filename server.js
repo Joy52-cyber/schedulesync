@@ -1,9 +1,9 @@
-﻿// ScheduleSync Backend API - Clean Production Version
+﻿// ScheduleSync Backend API - With SendGrid Email
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const path = require('path');
 require('dotenv').config();
 
@@ -19,6 +19,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-dev-secret-2025';
 const PORT = process.env.PORT || 8080;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'noreply@schedulesync.com';
 
 console.log('🚀 ScheduleSync API Starting...');
 console.log(`📡 Environment: ${NODE_ENV}`);
@@ -55,91 +57,145 @@ pool.on('error', (err) => {
 });
 
 // ========================
-// EMAIL SETUP (SIMPLE)
+// EMAIL SETUP (SENDGRID)
 // ========================
 
-let transporter = null;
-const EMAIL_USER = process.env.EMAIL_USER;
-const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+let emailEnabled = false;
 
-if (EMAIL_USER && EMAIL_PASSWORD) {
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: EMAIL_USER,
-      pass: EMAIL_PASSWORD
-    }
-  });
-  console.log('✅ Email service configured');
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  emailEnabled = true;
+  console.log('✅ SendGrid email service configured');
 } else {
-  console.log('⚠️ Email not configured (optional)');
+  console.log('⚠️ SendGrid API key not configured (email disabled)');
 }
 
 // ========================
-// EMAIL QUEUE
+// EMAIL FUNCTIONS
 // ========================
 
-const emailQueue = [];
-let emailWorkerRunning = false;
-
-async function enqueueEmail(emailData, priority = 'normal') {
-  if (!transporter) {
-    console.log('📧 Email skipped (not configured):', emailData.to);
-    return null;
+async function sendEmail(to, subject, html, text) {
+  if (!emailEnabled) {
+    console.log('📧 Email skipped (not configured):', to);
+    return false;
   }
 
-  const queueItem = {
-    id: Date.now() + '-' + Math.random(),
-    ...emailData,
-    priority,
-    createdAt: new Date(),
-    retries: 0,
-    maxRetries: 2,
-    status: 'queued'
-  };
-  
-  emailQueue.push(queueItem);
-  
-  if (!emailWorkerRunning) {
-    startEmailWorker();
+  try {
+    console.log(`📧 Sending email to: ${to}`);
+    
+    await sgMail.send({
+      to,
+      from: SENDER_EMAIL,
+      subject,
+      html,
+      text,
+      replyTo: SENDER_EMAIL
+    });
+
+    console.log(`✅ Email sent successfully to: ${to}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to send email to ${to}:`, error.message);
+    return false;
   }
-  
-  return queueItem.id;
 }
 
-function startEmailWorker() {
-  if (emailWorkerRunning) return;
-  emailWorkerRunning = true;
+async function sendTeamInviteEmail(inviteeEmail, inviterName, teamName, teamId) {
+  const joinLink = `${APP_URL}/join-team?teamId=${teamId}&email=${encodeURIComponent(inviteeEmail)}`;
   
-  const interval = setInterval(async () => {
-    const readyEmails = emailQueue.filter(item => item.status === 'queued');
-    
-    for (const emailItem of readyEmails) {
-      if (emailItem.status !== 'queued') continue;
-      emailItem.status = 'sending';
-      
-      try {
-        await transporter.sendMail(emailItem);
-        emailItem.status = 'sent';
-        console.log(`✅ Email sent to ${emailItem.to}`);
-      } catch (error) {
-        emailItem.retries++;
-        
-        if (emailItem.retries < emailItem.maxRetries) {
-          emailItem.status = 'queued';
-          console.warn(`⚠️ Email retry (${emailItem.retries}/${emailItem.maxRetries}): ${emailItem.to}`);
-        } else {
-          emailItem.status = 'failed';
-          console.error(`❌ Email failed: ${emailItem.to}`);
-        }
-      }
-    }
-    
-    if (emailQueue.length === 0) {
-      clearInterval(interval);
-      emailWorkerRunning = false;
-    }
-  }, 3000);
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">ScheduleSync</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Welcome to ${teamName}!</h2>
+        <p style="color: #4a5568; font-size: 16px;">Hi ${inviteeEmail.split('@')[0]},</p>
+        <p style="color: #4a5568; font-size: 16px;"><strong>${inviterName}</strong> has invited you to join <strong>${teamName}</strong>.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${joinLink}" style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Join Team Now</a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const text = `Welcome to ${teamName}!\n\n${inviterName} has invited you to join ${teamName}.\n\nJoin here: ${joinLink}`;
+
+  return sendEmail(inviteeEmail, `You've been invited to join ${teamName} on ScheduleSync`, html, text);
+}
+
+async function sendBookingConfirmationEmail(guestEmail, guestName, teamName, meetingDetails) {
+  const { date, time, duration, meetingLink, description } = meetingDetails;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">Booking Confirmed</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Thank you, ${guestName}!</h2>
+        <div style="background: white; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${date} at ${time}</p>
+          <p style="margin: 0 0 10px 0;"><strong>Duration:</strong> ${duration} minutes</p>
+          <p style="margin: 0 0 10px 0;"><strong>Team:</strong> ${teamName}</p>
+          ${meetingLink ? `<p style="margin: 0;"><strong>Meeting:</strong> <a href="${meetingLink}">${meetingLink}</a></p>` : ''}
+        </div>
+        ${description ? `<p style="color: #4a5568;"><strong>Details:</strong> ${description}</p>` : ''}
+      </div>
+    </div>
+  `;
+
+  const text = `Booking Confirmed!\n\nDate: ${date} at ${time}\nDuration: ${duration} minutes\nTeam: ${teamName}`;
+
+  return sendEmail(guestEmail, `Booking Confirmed: ${teamName} - ${date}`, html, text);
+}
+
+async function sendNewBookingNotificationEmail(memberEmail, memberName, guestName, teamName, meetingDetails) {
+  const { date, time, duration } = meetingDetails;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">New Booking</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #1a202c;">Hi ${memberName},</h2>
+        <p style="color: #4a5568; font-size: 16px;"><strong>${guestName}</strong> has booked a meeting with your team <strong>${teamName}</strong>.</p>
+        <div style="background: white; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Guest:</strong> ${guestName}</p>
+          <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${date} at ${time}</p>
+          <p style="margin: 0 0 10px 0;"><strong>Duration:</strong> ${duration} minutes</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const text = `New Booking\n\n${guestName} has booked a meeting.\n\nDate: ${date} at ${time}\nDuration: ${duration} minutes`;
+
+  return sendEmail(memberEmail, `New booking from ${guestName}`, html, text);
+}
+
+async function sendBookingCancellationEmail(guestEmail, guestName, teamName, meetingDetails) {
+  const { date, time } = meetingDetails;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">Booking Cancelled</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0;">
+        <p style="color: #4a5568; font-size: 16px;">Hi ${guestName},</p>
+        <p style="color: #4a5568; font-size: 16px;">Your booking with <strong>${teamName}</strong> has been cancelled.</p>
+        <div style="background: white; border-left: 4px solid #dc2626; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Original Date & Time:</strong> ${date} at ${time}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const text = `Booking Cancelled\n\nYour booking with ${teamName} on ${date} at ${time} has been cancelled.`;
+
+  return sendEmail(guestEmail, `Booking Cancelled: ${teamName} - ${date}`, html, text);
 }
 
 // ========================
@@ -171,24 +227,6 @@ const authenticate = (req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ========================
-// HEALTH CHECK
-// ========================
-
-app.get('/health', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT COUNT(*) as count FROM users');
-    res.json({ 
-      status: 'ok', 
-      timestamp: new Date().toISOString(),
-      database: 'connected',
-      users: parseInt(result.rows[0].count)
-    });
-  } catch (error) {
-    res.status(503).json({ status: 'error', database: 'disconnected' });
-  }
-});
-
-// ========================
 // PAGES
 // ========================
 
@@ -202,6 +240,25 @@ app.get('/dashboard', (req, res) => {
 
 app.get('/team-management', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'team-management.html'));
+});
+
+// ========================
+// HEALTH CHECK
+// ========================
+
+app.get('/health', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) as count FROM users');
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      email: emailEnabled ? 'enabled' : 'disabled',
+      users: parseInt(result.rows[0].count)
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'error', database: 'disconnected' });
+  }
 });
 
 // ========================
@@ -406,6 +463,25 @@ app.post('/api/booking/create', async (req, res) => {
     );
     
     const booking = result.rows[0];
+    
+    const startDate = new Date(slotStart);
+    const endDate = new Date(slotEnd);
+    const duration = (endDate - startDate) / (1000 * 60);
+    
+    const meetingDetails = {
+      date: startDate.toLocaleDateString(),
+      time: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration,
+      meetingLink: '',
+      description: notes || ''
+    };
+    
+    await sendBookingConfirmationEmail(guestEmail, guestName, team.name, meetingDetails);
+    
+    const memberResult = await pool.query('SELECT email, name FROM users WHERE id = $1', [membersResult.rows[0].user_id]);
+    const member = memberResult.rows[0];
+    await sendNewBookingNotificationEmail(member.email, member.name, guestName, team.name, meetingDetails);
+    
     console.log(`Booking created: ${booking.id}`);
     
     res.json({
@@ -445,10 +521,23 @@ app.post('/api/booking/cancel', async (req, res) => {
       return res.status(404).json({ error: 'Booking not found' });
     }
     
+    const booking = bookingResult.rows[0];
+    
     await pool.query(
       'UPDATE bookings SET status = $1, cancelled_at = NOW() WHERE id = $2',
       ['cancelled', bookingId]
     );
+    
+    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [booking.team_id]);
+    const team = teamResult.rows[0];
+    
+    const startDate = new Date(booking.slot_start);
+    const meetingDetails = {
+      date: startDate.toLocaleDateString(),
+      time: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    await sendBookingCancellationEmail(booking.guest_email, booking.guest_name, team.name, meetingDetails);
     
     res.json({ success: true });
   } catch (error) {
@@ -525,6 +614,19 @@ app.post('/api/teams/:teamId/members', authenticate, async (req, res) => {
        ON CONFLICT (team_id, user_id) DO NOTHING`,
       [req.params.teamId, userId]
     );
+    
+    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [req.params.teamId]);
+    const userResult = await pool.query('SELECT email, name FROM users WHERE id = $1', [userId]);
+    
+    if (teamResult.rows[0] && userResult.rows[0]) {
+      const inviterResult = await pool.query('SELECT name FROM users WHERE id = $1', [req.userId]);
+      await sendTeamInviteEmail(
+        userResult.rows[0].email,
+        inviterResult.rows[0]?.name || 'A team member',
+        teamResult.rows[0].name,
+        req.params.teamId
+      );
+    }
     
     res.json({ success: true });
   } catch (e) {
