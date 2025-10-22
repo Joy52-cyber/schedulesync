@@ -192,16 +192,20 @@ app.get('/health', async (req, res) => {
 // PAGES
 // ========================
 
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
 app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dashboard.html'));
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 app.get('/team-management', (req, res) => {
-  res.sendFile(path.join(__dirname, 'team-management.html'));
+  res.sendFile(path.join(__dirname, 'public', 'team-management.html'));
 });
 
 app.get('/booking.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'booking.html'));
+  res.sendFile(path.join(__dirname, 'public', 'booking.html'));
 });
 
 // ========================
