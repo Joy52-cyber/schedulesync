@@ -119,7 +119,30 @@ async function initDatabase() {
     console.log('  ✅ calendar_connections table');
     
     dbReady = true;
-    console.log('✅ Database schema ready\n');
+    console.log('✅ Database schema ready');
+    
+    await createTestUser();
+  } catch (error) {
+    console.error('❌ Database init error:', error.message);
+  }
+}
+
+async function createTestUser() {
+  try {
+    const testEmail = 'test@example.com';
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [testEmail]);
+    
+    if (exists.rows.length === 0) {
+      await pool.query(
+        'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
+        ['Test User', testEmail, 'password123']
+      );
+      console.log('✅ Test user created: test@example.com / password123');
+    }
+  } catch (error) {
+    console.error('⚠️ Could not create test user:', error.message);
+  }
+}
   } catch (error) {
     console.error('❌ Database init error:', error.message);
   }
@@ -134,21 +157,32 @@ app.post('/api/auth/signup', async (req, res) => {
     const { name, email, password } = req.body;
     
     if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'Missing required fields: name, email, password' });
     }
     
-    const result = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
-      [name, email, password]
-    );
+    if (password.length < 3) {
+      return res.status(400).json({ error: 'Password must be at least 3 characters' });
+    }
     
-    const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.json({
-      success: true,
-      token,
-      user: result.rows[0]
-    });
+    try {
+      const result = await pool.query(
+        'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+        [name, email, password]
+      );
+      
+      const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
+      
+      res.status(201).json({
+        success: true,
+        token,
+        user: result.rows[0]
+      });
+    } catch (dbError) {
+      if (dbError.code === '23505') {
+        return res.status(409).json({ error: 'Email already exists' });
+      }
+      throw dbError;
+    }
   } catch (error) {
     console.error('Signup error:', error.message);
     res.status(500).json({ error: error.message });
@@ -164,20 +198,29 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     const result = await pool.query(
-      'SELECT id, name, email FROM users WHERE email = $1 AND password = $2',
-      [email, password]
+      'SELECT id, name, email, password FROM users WHERE email = $1',
+      [email]
     );
     
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
+    const user = result.rows[0];
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     
     res.json({
       success: true,
       token,
-      user: result.rows[0]
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
     });
   } catch (error) {
     console.error('Login error:', error.message);
