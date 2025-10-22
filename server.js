@@ -57,15 +57,20 @@ const emailEnv = {
 };
 const emailConfigured = Boolean(emailEnv.user && emailEnv.pass);
 
+// Health (includes emailConfigured flag)
 app.get("/health", (_req, res) => {
+  const emailConfigured = Boolean(
+    (process.env.EMAIL_USER || "") && (process.env.EMAIL_PASSWORD || "")
+  );
   res.json({
     status: "ok",
-    env: NODE_ENV,
+    env: process.env.NODE_ENV || "production",
     db: "mock",
     emailConfigured,
     time: new Date().toISOString(),
   });
 });
+
 
 // ----------------------------------------------------------------------------
 // Mock API (keeps the UI working without a real database)
