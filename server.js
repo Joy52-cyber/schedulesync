@@ -319,4 +319,18 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log("✅ ScheduleSync API Server Running");
+  console.log(`📡 Listening on http://0.0.0.0:${PORT}`);
+  if (process.env.RAILWAY_STATIC_URL) {
+    console.log(`🌐 Public: ${process.env.RAILWAY_STATIC_URL}`);
+  }
+  console.log(`🗄️  DB mode: ${dbStatus} | 📧 email: ${emailConfigured ? "on" : "off"}`);
+  console.log("");
+});
+
+
+
 start();
