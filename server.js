@@ -404,10 +404,6 @@ app.post('/api/teams/:teamId/members', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Only admins can add members' });
     }
 
-    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [teamId]);
-    const inviterResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.userId]);
-    const inviteeResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
-
     await pool.query(
       `INSERT INTO team_members (team_id, user_id, role, joined_at)
        VALUES ($1, $2, $3, NOW())
@@ -415,17 +411,28 @@ app.post('/api/teams/:teamId/members', authenticate, async (req, res) => {
       [teamId, userId, role || 'member']
     );
 
-    // Send invitation email
-    const teamName = teamResult.rows[0]?.name || 'Team';
-    const inviterName = inviterResult.rows[0]?.name || 'Team Admin';
-    const inviteeEmail = inviteeResult.rows[0]?.email;
-
-    if (inviteeEmail) {
-      const emailHtml = getTeamInviteEmail(inviteeEmail, inviterName, teamName);
-      await sendEmail(inviteeEmail, `You've been invited to join ${teamName} on ScheduleSync`, emailHtml);
-    }
-
     console.log(`✅ Member ${userId} added to team ${teamId}`);
+    
+    // Send email in background (don't wait for it)
+    setImmediate(async () => {
+      try {
+        const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [teamId]);
+        const inviterResult = await pool.query('SELECT name FROM users WHERE id = $1', [req.userId]);
+        const inviteeResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+
+        const teamName = teamResult.rows[0]?.name || 'Team';
+        const inviterName = inviterResult.rows[0]?.name || 'Team Admin';
+        const inviteeEmail = inviteeResult.rows[0]?.email;
+
+        if (inviteeEmail) {
+          const emailHtml = getTeamInviteEmail(inviteeEmail, inviterName, teamName);
+          await sendEmail(inviteeEmail, `You've been invited to join ${teamName} on ScheduleSync`, emailHtml);
+        }
+      } catch (emailError) {
+        console.error('Background email send error:', emailError.message);
+      }
+    });
+
     res.json({ success: true });
   } catch (error) {
     console.error('Add member error:', error.message);
