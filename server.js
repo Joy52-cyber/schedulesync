@@ -418,7 +418,8 @@ app.get('/api/calendar/google/auth', authenticateToken, (req, res) => {
   
   // Check if credentials are properly configured (not default values)
   const isConfigured = googleClientId && 
-                       googleClientId !== 'YOUR_GOOGLE_CLIENT_ID_HERE' &&
+                       googleClientId !== '1046899819143-hnebgn1jti2ec2j8v1e25sn6vuae961e.apps.googleusercontent.com
+' &&
                        googleClientId.length > 20;
   
   if (!isConfigured) {
@@ -450,7 +451,7 @@ app.get('/api/calendar/microsoft/auth', authenticateToken, (req, res) => {
   
   // Check if credentials are properly configured (not default values)
   const isConfigured = microsoftClientId && 
-                       microsoftClientId !== 'YOUR_MICROSOFT_CLIENT_ID_HERE' &&
+                       microsoftClientId !== 'c3bb1864-422d-4fa8-8701-27f7b903d1e9' &&
                        microsoftClientId.length > 20;
   
   if (!isConfigured) {
@@ -539,9 +540,9 @@ app.delete('/api/calendar/connections/:id', authenticateToken, async (req, res) 
 // Configuration Status
 app.get('/api/config/status', (req, res) => {
   const microsoftConfigured = !!(MICROSOFT_CLIENT_ID && 
-    MICROSOFT_CLIENT_ID !== 'YOUR_MICROSOFT_CLIENT_ID_HERE');
+    MICROSOFT_CLIENT_ID !== 'c3bb1864-422d-4fa8-8701-27f7b903d1e9');
   const googleConfigured = !!(GOOGLE_CLIENT_ID && 
-    GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE');
+    GOOGLE_CLIENT_ID !== '1046899819143-hnebgn1jti2ec2j8v1e25sn6vuae961e.apps.googleusercontent.com');
 
   res.json({
     microsoft: {
