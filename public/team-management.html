@@ -1,396 +1,166 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Team Management • ScheduleSync</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Management - ScheduleSync</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:50; }
-    .modal.open { display:flex; align-items:center; justify-content:center; }
+    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
   </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
-  <!-- Top Nav -->
-  <nav class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-      <a href="/dashboard" class="text-2xl font-semibold tracking-tight">📅 ScheduleSync</a>
+<body class="bg-gray-100">
+  <!-- Header -->
+  <nav class="gradient-bg text-white shadow-lg">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
       <div class="flex items-center gap-2">
-        <a href="/dashboard" class="px-3 py-2 rounded hover:bg-white/10">📊 Dashboard</a>
-        <a href="/team-management" class="px-3 py-2 rounded bg-white/20 font-semibold">👥 Team Management</a>
-        <a href="/booking.html" class="px-3 py-2 rounded hover:bg-white/10">📖 Public Booking</a>
+        <div class="text-2xl">📅</div>
+        <div class="font-bold text-xl">ScheduleSync</div>
+      </div>
+      <div class="flex gap-4">
+        <a href="/dashboard" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Dashboard</a>
+        <button onclick="logout()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Logout</button>
       </div>
     </div>
   </nav>
 
-  <!-- API status banner -->
-  <div id="apiBanner" class="hidden">
-    <div class="max-w-7xl mx-auto px-4 mt-4">
-      <div class="rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-900 p-4">
-        <strong>API unavailable.</strong> Showing demo UI only (requests may fail with 404).
-      </div>
-    </div>
-  </div>
+  <!-- Main Content -->
+  <div class="max-w-4xl mx-auto px-6 py-12">
+    <div class="bg-white rounded-lg shadow-xl p-8">
+      <h1 class="text-3xl font-bold mb-2">Team Management</h1>
+      <p class="text-gray-600 mb-8">Create and manage your teams</p>
 
-  <!-- Content -->
-  <main class="max-w-7xl mx-auto px-4 py-8" id="root"></main>
-
-  <!-- Create Team Modal -->
-  <div id="createModal" class="modal">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-      <h3 class="text-xl font-semibold mb-4">Create Team</h3>
-      <div class="space-y-4">
-        <div>
-          <label class="text-sm text-gray-600 block mb-1">Team Name</label>
-          <input id="newTeamName" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Sales Team"/>
-        </div>
-        <div>
-          <label class="text-sm text-gray-600 block mb-1">Scheduling Mode</label>
-          <select id="newTeamMode" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="round_robin">Round Robin</option>
-            <option value="collective">Collective</option>
-            <option value="first_available">First Available</option>
-          </select>
-        </div>
-      </div>
-      <div class="mt-6 flex justify-end gap-2">
-        <button onclick="closeCreate()" class="px-4 py-2 rounded-lg border">Cancel</button>
-        <button onclick="createTeam()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Create</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Edit Team Modal -->
-  <div id="editModal" class="modal">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-      <h3 class="text-xl font-semibold mb-4">Edit Team</h3>
-      <div class="space-y-4">
-        <div>
-          <label class="text-sm text-gray-600 block mb-1">Team Name</label>
-          <input id="editTeamName" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-        </div>
-        <div>
-          <label class="text-sm text-gray-600 block mb-1">Description</label>
-          <textarea id="editTeamDesc" rows="3" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-        </div>
-      </div>
-      <div class="mt-6 flex justify-end gap-2">
-        <button onclick="closeEdit()" class="px-4 py-2 rounded-lg border">Cancel</button>
-        <button onclick="saveTeam()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- API helper (Option A: talk to Production) -->
-  <script>
-    // 👉 Point the UI to your live backend API (no trailing slash)
-    const API_BASE = 'https://schedulesync-production.up.railway.app';
-
-    function joinUrl(base, endpoint) {
-      const b = (base || '').replace(/\/+$/, '');
-      const e = (endpoint || '').replace(/^\/+/, '');
-      return b + '/' + e;
-    }
-
-    async function apiCall(endpoint, options = {}) {
-      const url = joinUrl(API_BASE, endpoint);
-      const res = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-          ...(window.currentToken ? { Authorization: `Bearer ${window.currentToken}` } : {})
-        }
-      });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      return res.json();
-    }
-  </script>
-
-  <!-- Page logic -->
-  <script>
-    // State
-    let teams = [];
-    let selectedTeamId = null;
-    let selectedTeam = null;
-    let currentToken = null;
-
-    // UI helpers
-    function openCreate(){ document.getElementById('createModal').classList.add('open'); }
-    function closeCreate(){ document.getElementById('createModal').classList.remove('open'); }
-    function openEdit(){ document.getElementById('editModal').classList.add('open'); }
-    function closeEdit(){ document.getElementById('editModal').classList.remove('open'); }
-
-    function copyToClipboard(text, btn) {
-      navigator.clipboard.writeText(text).then(() => {
-        const old = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => (btn.textContent = old), 1200);
-      });
-    }
-
-    // Auth bootstrap (demo account)
-    async function ensureToken() {
-      const cached = localStorage.getItem('schedulesync_token');
-      if (cached) { currentToken = cached; return; }
-      try {
-        const data = await apiCall('/api/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({ email: 'demo@schedulesync.com', name: 'Demo User', extensionId: 'web-dashboard' })
-        });
-        currentToken = data.token;
-        localStorage.setItem('schedulesync_token', currentToken);
-      } catch (e) {
-        // API likely unavailable
-        document.getElementById('apiBanner').classList.remove('hidden');
-      }
-    }
-
-    // Data loads
-    async function loadTeams() {
-      try {
-        const data = await apiCall('/api/teams', { headers: { Authorization: `Bearer ${currentToken}` } });
-        teams = data.teams || [];
-      } catch (e) {
-        teams = [];
-      }
-    }
-
-    async function loadTeam(teamId) {
-      try {
-        const data = await apiCall(`/api/teams/${teamId}`, { headers: { Authorization: `Bearer ${currentToken}` } });
-        selectedTeam = data;
-      } catch (e) {
-        selectedTeam = null;
-      }
-    }
-
-    // Actions
-    async function createTeam() {
-      const name = document.getElementById('newTeamName').value.trim();
-      const mode = document.getElementById('newTeamMode').value;
-      if (!name) return alert('Enter a team name');
-
-      try {
-        await apiCall('/api/teams', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${currentToken}` },
-          body: JSON.stringify({
-            name,
-            schedulingMode: mode,
-            publicUrl: name.toLowerCase().replace(/\s+/g, '-')
-          })
-        });
-      } catch (e) {
-        alert('Create failed. If running demo, this is expected.\n' + e.message);
-      }
-      closeCreate();
-      await loadTeams();
-      render();
-    }
-
-    async function saveTeam() {
-      const name = document.getElementById('editTeamName').value.trim();
-      const description = document.getElementById('editTeamDesc').value.trim();
-
-      try {
-        await apiCall(`/api/teams/${selectedTeamId}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${currentToken}` },
-          body: JSON.stringify({ name, description })
-        });
-      } catch (e) {
-        alert('Save failed. If running demo, this is expected.\n' + e.message);
-      }
-      closeEdit();
-      selectedTeamId = null;
-      await loadTeams();
-      render();
-    }
-
-    async function inviteMember() {
-      const emailEl = document.getElementById('inviteEmail');
-      const roleEl  = document.getElementById('inviteRole');
-      const email = emailEl.value.trim();
-      const role = roleEl.value;
-
-      if (!email || !email.includes('@')) return alert('Enter a valid email');
-
-      try {
-        // register user (id for membership)
-        const reg = await apiCall('/api/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({ email, name: email.split('@')[0], extensionId: 'web-invite' })
-        });
-
-        await apiCall(`/api/teams/${selectedTeamId}/members`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${currentToken}` },
-          body: JSON.stringify({ userId: reg.user.id, role })
-        });
-      } catch (e) {
-        return alert('Invite failed. If running demo, this is expected.\n' + e.message);
-      }
-
-      emailEl.value = '';
-      await goBack();
-    }
-
-    async function changeRole(userId, newRole) {
-      try {
-        await apiCall(`/api/teams/${selectedTeamId}/members/${userId}/role`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${currentToken}` },
-          body: JSON.stringify({ role: newRole })
-        });
-        await goBack();
-      } catch (e) {
-        alert('Change role failed.\n' + e.message);
-      }
-    }
-
-    async function removeMember(userId, email) {
-      if (!confirm(`Remove ${email}?`)) return;
-      try {
-        await apiCall(`/api/teams/${selectedTeamId}/members/${userId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${currentToken}` }
-        });
-        await goBack();
-      } catch (e) {
-        alert('Remove failed.\n' + e.message);
-      }
-    }
-
-    // Navigation
-    function selectTeam(id) { selectedTeamId = id; render(); }
-    async function goBack() { selectedTeamId = null; await loadTeams(); render(); }
-
-    // Render
-    function render() {
-      const root = document.getElementById('root');
-      if (!selectedTeamId) {
-        // List view
-        root.innerHTML = `
-          <div class="flex items-center justify-between mb-6">
-            <div>
-              <h1 class="text-3xl font-bold text-gray-900">Team Management</h1>
-              <p class="text-gray-600">Manage your scheduling teams</p>
-            </div>
-            <button onclick="openCreate()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-              + Create Team
-            </button>
+      <!-- Create Team Section -->
+      <div class="border-b pb-8 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Create New Team</h2>
+        <form id="createTeamForm" onsubmit="handleCreateTeam(event)">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Team Name</label>
+            <input type="text" id="teamName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
           </div>
 
-          ${teams.length === 0 ? `
-            <div class="bg-white rounded-xl shadow p-10 text-center">
-              <p class="text-gray-600 mb-4">No teams yet</p>
-              <button onclick="openCreate()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Create your first team</button>
-            </div>
-          ` : `
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              ${teams.map(t => `
-                <div class="bg-white rounded-xl shadow p-6 hover:shadow-lg transition">
-                  <h3 class="text-lg font-semibold text-gray-900">${t.name}</h3>
-                  <p class="text-sm text-gray-600 mt-1">Mode: ${(t.scheduling_mode || '').replace(/_/g,' ').toUpperCase()}</p>
-                  <p class="text-sm text-gray-600">Members: ${t.member_count || 0}</p>
-                  <div class="mt-4">
-                    <div class="text-xs text-gray-500 mb-1">Public URL</div>
-                    <div class="text-xs font-mono bg-gray-50 border rounded p-2 break-all">${t.public_url}</div>
-                  </div>
-                  <button onclick="selectTeam(${t.id})" class="mt-4 w-full px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                    View Details
-                  </button>
-                </div>
-              `).join('')}
-            </div>
-          `}
-        `;
-      } else {
-        // Detail view
-        // load details then render
-        loadTeam(selectedTeamId).then(() => {
-          const team = selectedTeam?.team || {};
-          const members = selectedTeam?.members || [];
-          const bookingLink = `${location.protocol}//${location.host}/booking.html?team=${team.public_url || ''}`;
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea id="teamDescription" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" rows="3"></textarea>
+          </div>
 
-          root.innerHTML = `
-            <button onclick="goBack()" class="mb-4 text-indigo-700 hover:underline">&larr; Back to Teams</button>
+          <button type="submit" class="gradient-bg text-white font-semibold px-6 py-2 rounded-lg hover:shadow-lg transition">
+            Create Team
+          </button>
+        </form>
+      </div>
 
-            <div class="bg-white rounded-xl shadow p-6 mb-6">
-              <div class="flex items-start justify-between">
-                <div>
-                  <h2 class="text-2xl font-semibold text-gray-900">${team.name || 'Team'}</h2>
-                  <p class="text-gray-600">${team.description || ''}</p>
-                  <div class="mt-3 flex gap-2">
-                    <span class="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-800">${(team.scheduling_mode || '').replace(/_/g,' ').toUpperCase()}</span>
-                    <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">Public</span>
-                  </div>
-                </div>
-                <button onclick="document.getElementById('editTeamName').value='${team.name || ''}';document.getElementById('editTeamDesc').value='${team.description || ''}';openEdit()" class="p-2 rounded hover:bg-gray-100">✎</button>
-              </div>
-            </div>
+      <!-- Teams List -->
+      <div>
+        <h2 class="text-xl font-semibold mb-4">Your Teams</h2>
+        <div id="teamsList" class="space-y-4">
+          <p class="text-gray-500">Loading teams...</p>
+        </div>
+      </div>
 
-            <div class="bg-white rounded-xl shadow p-6 mb-6">
-              <h3 class="font-semibold text-gray-900 mb-2">📖 Public Booking Link</h3>
-              <div class="flex gap-2">
-                <input class="flex-1 border rounded-lg px-3 py-2 font-mono text-sm" value="${bookingLink}" readonly />
-                <button onclick="copyToClipboard('${bookingLink}', this)" class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Copy</button>
-              </div>
-            </div>
+      <!-- Message -->
+      <div id="message" class="mt-4 p-4 rounded-lg hidden"></div>
+    </div>
+  </div>
 
-            <div class="grid md:grid-cols-2 gap-6">
-              <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold text-gray-900 mb-4">Add Member</h3>
-                <div class="space-y-3">
-                  <input id="inviteEmail" type="email" class="w-full border rounded-lg px-3 py-2" placeholder="user@example.com"/>
-                  <select id="inviteRole" class="w-full border rounded-lg px-3 py-2">
-                    <option value="admin">Admin</option>
-                    <option value="member" selected>Member</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
-                  <button onclick="inviteMember()" class="w-full px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Send Invite</button>
-                </div>
-              </div>
+  <script>
+    const API_BASE = `${window.location.protocol}//${window.location.host}`;
 
-              <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold text-gray-900 mb-4">Members (${members.length})</h3>
-                <div class="space-y-3">
-                  ${members.length === 0 ? `<p class="text-gray-600">No members yet</p>` : members.map(m => `
-                    <div class="flex items-center justify-between border rounded-lg p-3">
-                      <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-semibold">
-                          ${(m.name || m.email || '?')[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <div class="font-medium text-gray-900">${m.email}</div>
-                          <div class="text-xs text-gray-500">${m.role}</div>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <select onchange="changeRole(${m.id}, this.value)" class="border rounded px-2 py-1 text-sm">
-                          <option value="admin" ${m.role==='admin'?'selected':''}>Admin</option>
-                          <option value="member" ${m.role==='member'?'selected':''}>Member</option>
-                          <option value="viewer" ${m.role==='viewer'?'selected':''}>Viewer</option>
-                        </select>
-                        <button onclick="removeMember(${m.id}, '${m.email}')" class="text-red-600 hover:bg-red-50 rounded px-2 py-1">Delete</button>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            </div>
-          `;
+    // Check authentication
+    if (!localStorage.getItem('token')) {
+      window.location.href = '/login';
+    }
+
+    // Load teams on page load
+    loadTeams();
+
+    async function loadTeams() {
+      try {
+        const response = await fetch(`${API_BASE}/api/teams`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
+
+        const data = await response.json();
+        displayTeams(data.teams || []);
+      } catch (error) {
+        showMessage('Error loading teams: ' + error.message, 'error');
       }
     }
 
-    // Init
-    (async function init() {
-      await ensureToken();
-      await loadTeams();
-      render();
-    })();
+    function displayTeams(teams) {
+      const teamsList = document.getElementById('teamsList');
+
+      if (!teams || teams.length === 0) {
+        teamsList.innerHTML = '<p class="text-gray-500">You haven\'t created any teams yet. Create your first team above!</p>';
+        return;
+      }
+
+      const html = teams.map(team => `
+        <div class="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
+          <h3 class="text-lg font-semibold text-gray-900">${team.name}</h3>
+          <p class="text-gray-600 text-sm mt-1">${team.description || 'No description'}</p>
+          <div class="mt-4 flex gap-2">
+            <button onclick="alert('Team details coming soon')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
+              Manage
+            </button>
+            <button onclick="copyPublicLink('${team.public_url}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition text-sm">
+              Copy Link
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      teamsList.innerHTML = html;
+    }
+
+    async function handleCreateTeam(event) {
+      event.preventDefault();
+
+      const name = document.getElementById('teamName').value;
+      const description = document.getElementById('teamDescription').value;
+
+      try {
+        const response = await fetch(`${API_BASE}/api/teams`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ name, description })
+        });
+
+        const data = await response.json();
+
+        if (data.team) {
+          showMessage('✅ Team created successfully!', 'success');
+          document.getElementById('createTeamForm').reset();
+          loadTeams();
+        } else {
+          showMessage(data.error || 'Failed to create team', 'error');
+        }
+      } catch (error) {
+        showMessage('Error: ' + error.message, 'error');
+      }
+    }
+
+    function copyPublicLink(url) {
+      const bookingLink = `${window.location.origin}/booking?team=${url}`;
+      navigator.clipboard.writeText(bookingLink);
+      showMessage('✅ Booking link copied to clipboard!', 'success');
+    }
+
+    function showMessage(msg, type) {
+      const messageDiv = document.getElementById('message');
+      messageDiv.textContent = msg;
+      messageDiv.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
+      messageDiv.classList.add(type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700');
+      setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
   </script>
 </body>
 </html>
