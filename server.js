@@ -1,4 +1,24 @@
 ﻿// server.js
+import pkg from 'pg';
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
+});
+
+// Check connection
+try {
+  const client = await pool.connect();
+  console.log("✅ Database connected");
+  client.release();
+} catch (err) {
+  console.error("❌ Database connection failed:", err.message);
+}
+
+
 "use strict";
 
 const express = require("express");
