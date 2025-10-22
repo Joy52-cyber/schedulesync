@@ -1,23 +1,431 @@
-﻿<!doctype html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Dashboard · ScheduleSync</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - ScheduleSync</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 250px; background: #1a202c; overflow-y: auto; z-index: 40; }
+    .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: #cbd5e0; transition: all 0.2s; cursor: pointer; }
+    .sidebar-link:hover { background: #2d3748; color: white; }
+    .sidebar-link.active { background: #667eea; color: white; }
+    .main-content { margin-left: 250px; }
+    .metric-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .metric-value { font-size: 32px; font-weight: bold; color: #1a202c; }
+    .metric-label { color: #718096; font-size: 14px; margin-top: 5px; }
+    .section-title { font-size: 24px; font-weight: bold; color: #1a202c; margin-bottom: 20px; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    .modal.active { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; }
+    .btn-primary { background: #667eea; color: white; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-secondary { background: #e2e8f0; color: #1a202c; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-secondary:hover { background: #cbd5e0; }
+    .btn-danger { background: #f56565; color: white; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; }
+    .btn-danger:hover { background: #e53e3e; }
+    .table-row { padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .status-confirmed { background: #c6f6d5; color: #22543d; }
+    .status-pending { background: #bee3f8; color: #2c5282; }
+    .status-cancelled { background: #fed7d7; color: #742a2a; }
+    .input-field { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; margin-bottom: 15px; font-size: 14px; }
+    .input-field:focus { outline: none; border-color: #667eea; }
+  </style>
 </head>
-<body class="bg-slate-50">
-  <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex gap-4">
-      <span class="font-semibold">📊 Dashboard</span>
-      <a href="/team-management" class="hover:underline">👥 Team Management</a>
-      <a href="/booking" class="hover:underline">📖 Public Booking</a>
+<body class="bg-gray-100">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="px-6 py-8 border-b border-gray-700">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="text-2xl">📅</div>
+        <div class="font-bold text-white text-lg">ScheduleSync</div>
+      </div>
+      <p class="text-xs text-gray-400">Admin Dashboard</p>
     </div>
-  </nav>
 
-  <main class="max-w-3xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-2">Dashboard</h1>
-    <p class="text-slate-600">Static page at <code>/public/dashboard.html</code>.</p>
-  </main>
+    <div class="py-6">
+      <div class="sidebar-link active" onclick="switchTab('overview')">
+        <span>📊</span>
+        <span>Overview</span>
+      </div>
+      <div class="sidebar-link" onclick="switchTab('teams')">
+        <span>👥</span>
+        <span>Teams</span>
+      </div>
+      <div class="sidebar-link" onclick="switchTab('bookings')">
+        <span>📆</span>
+        <span>Bookings</span>
+      </div>
+      <div class="sidebar-link" onclick="switchTab('analytics')">
+        <span>📈</span>
+        <span>Analytics</span>
+      </div>
+      <div class="sidebar-link" onclick="logout()">
+        <span>🚪</span>
+        <span>Logout</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Navigation -->
+  <div class="main-content">
+    <nav class="gradient-bg text-white shadow-lg sticky top-0 z-30">
+      <div class="px-8 py-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold" id="page-title">Dashboard Overview</h1>
+        <div class="flex items-center gap-4">
+          <span id="user-name">Loading...</span>
+          <button onclick="logout()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Sign Out</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="p-8">
+      <!-- Overview Tab -->
+      <div id="overview-tab" class="fade-in">
+        <div class="section-title">Dashboard Overview</div>
+        
+        <!-- Key Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div class="metric-card">
+            <div class="metric-value" id="total-teams">0</div>
+            <div class="metric-label">Total Teams</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" id="total-bookings">0</div>
+            <div class="metric-label">Total Bookings</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" id="confirmed-bookings">0</div>
+            <div class="metric-label">Confirmed</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" id="pending-bookings">0</div>
+            <div class="metric-label">Pending</div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Bookings This Month</h3>
+            <canvas id="bookingsChart"></canvas>
+          </div>
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Booking Status</h3>
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Recent Bookings -->
+        <div class="metric-card">
+          <h3 class="text-lg font-bold mb-4">Recent Bookings</h3>
+          <div id="recent-bookings-list">
+            <p class="text-gray-500">Loading...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Teams Tab -->
+      <div id="teams-tab" class="fade-in" style="display: none;">
+        <div class="flex justify-between items-center mb-8">
+          <div class="section-title">Teams Management</div>
+          <button onclick="openCreateTeamModal()" class="btn-primary">+ Create Team</button>
+        </div>
+
+        <div class="metric-card">
+          <div id="teams-list">
+            <p class="text-gray-500">Loading teams...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bookings Tab -->
+      <div id="bookings-tab" class="fade-in" style="display: none;">
+        <div class="section-title">All Bookings</div>
+
+        <div class="metric-card mb-6">
+          <div class="flex gap-4 mb-4">
+            <select id="booking-filter" onchange="filterBookings()" class="input-field" style="width: 200px;">
+              <option value="">All Bookings</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div id="bookings-list">
+            <p class="text-gray-500">Loading bookings...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analytics Tab -->
+      <div id="analytics-tab" class="fade-in" style="display: none;">
+        <div class="section-title">Analytics & Insights</div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Booking Rate</h3>
+            <div class="metric-value" id="booking-rate">0%</div>
+            <p class="text-gray-500 text-sm mt-2">Percentage of available slots booked</p>
+          </div>
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Cancellation Rate</h3>
+            <div class="metric-value" id="cancellation-rate">0%</div>
+            <p class="text-gray-500 text-sm mt-2">Percentage of bookings cancelled</p>
+          </div>
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Avg Response Time</h3>
+            <div class="metric-value" id="avg-response">0h</div>
+            <p class="text-gray-500 text-sm mt-2">Average time to confirm booking</p>
+          </div>
+          <div class="metric-card">
+            <h3 class="text-lg font-bold mb-4">Most Popular Time</h3>
+            <div class="metric-value" id="popular-time">10 AM</div>
+            <p class="text-gray-500 text-sm mt-2">Most booked time slot</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Team Modal -->
+  <div id="create-team-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-2xl font-bold mb-6">Create New Team</h2>
+      <input type="text" id="team-name" class="input-field" placeholder="Team name" />
+      <select id="team-mode" class="input-field">
+        <option value="one_on_one">One on One</option>
+        <option value="group">Group</option>
+        <option value="round_robin">Round Robin</option>
+      </select>
+      <textarea id="team-description" class="input-field" placeholder="Team description (optional)" rows="3"></textarea>
+      <div class="flex gap-4">
+        <button onclick="closeCreateTeamModal()" class="btn-secondary flex-1">Cancel</button>
+        <button onclick="createTeam()" class="btn-primary flex-1">Create Team</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = `${window.location.protocol}//${window.location.host}`;
+    let currentTab = 'overview';
+    let bookingsChart = null;
+    let statusChart = null;
+
+    // Initialize
+    async function init() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      await loadUserInfo();
+      await loadDashboardData();
+    }
+
+    async function loadUserInfo() {
+      try {
+        const response = await fetch(`${API_BASE}/api/users/me`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await response.json();
+        document.getElementById('user-name').textContent = data.user?.name || 'User';
+      } catch (error) {
+        console.error('Error loading user info:', error);
+      }
+    }
+
+    async function loadDashboardData() {
+      try {
+        // Load analytics data
+        const analyticsRes = await fetch(`${API_BASE}/api/analytics/dashboard`);
+        const analytics = await analyticsRes.json();
+
+        // Load teams
+        const teamsRes = await fetch(`${API_BASE}/api/teams`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const teamsData = await teamsRes.json();
+
+        // Load member bookings
+        const bookingsRes = await fetch(`${API_BASE}/api/member/bookings`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const bookingsData = await bookingsRes.json();
+
+        // Update metrics
+        document.getElementById('total-teams').textContent = teamsData.teams?.length || 0;
+        document.getElementById('total-bookings').textContent = analytics.stats?.totalBookings || 0;
+        document.getElementById('confirmed-bookings').textContent = bookingsData.bookings?.filter(b => b.status === 'confirmed').length || 0;
+        document.getElementById('pending-bookings').textContent = bookingsData.bookings?.filter(b => b.status === 'pending').length || 0;
+
+        // Render teams list
+        renderTeamsList(teamsData.teams || []);
+
+        // Render bookings list
+        renderBookingsList(bookingsData.bookings || []);
+
+        // Initialize charts
+        initCharts(bookingsData.bookings || []);
+
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      }
+    }
+
+    function renderTeamsList(teams) {
+      const html = teams.map(team => `
+        <div class="table-row">
+          <div>
+            <p class="font-semibold">${team.name}</p>
+            <p class="text-sm text-gray-500">${team.member_count} members</p>
+          </div>
+          <div>
+            <span class="status-badge" style="background: #c6f6d5; color: #22543d;">Active</span>
+          </div>
+          <button onclick="viewTeam('${team.id}')" class="btn-primary">View</button>
+        </div>
+      `).join('');
+      document.getElementById('teams-list').innerHTML = html || '<p class="text-gray-500">No teams created yet</p>';
+    }
+
+    function renderBookingsList(bookings) {
+      const html = bookings.slice(0, 10).map(booking => `
+        <div class="table-row">
+          <div>
+            <p class="font-semibold">${booking.guest_name || 'Unknown'}</p>
+            <p class="text-sm text-gray-500">${new Date(booking.slot_start).toLocaleDateString()} at ${new Date(booking.slot_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+          </div>
+          <div>
+            <span class="status-badge ${booking.status === 'confirmed' ? 'status-confirmed' : booking.status === 'pending' ? 'status-pending' : 'status-cancelled'}">${booking.status.toUpperCase()}</span>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('recent-bookings-list').innerHTML = html || '<p class="text-gray-500">No bookings yet</p>';
+    }
+
+    function initCharts(bookings) {
+      // Bookings this month chart
+      const ctx1 = document.getElementById('bookingsChart')?.getContext('2d');
+      if (ctx1) {
+        bookingsChart = new Chart(ctx1, {
+          type: 'line',
+          data: {
+            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+            datasets: [{
+              label: 'Bookings',
+              data: [3, 7, 5, 9],
+              borderColor: '#667eea',
+              backgroundColor: 'rgba(102, 126, 234, 0.1)',
+              tension: 0.3,
+              fill: true
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: true }
+        });
+      }
+
+      // Status distribution chart
+      const ctx2 = document.getElementById('statusChart')?.getContext('2d');
+      if (ctx2) {
+        const confirmed = bookings.filter(b => b.status === 'confirmed').length;
+        const pending = bookings.filter(b => b.status === 'pending').length;
+        const cancelled = bookings.filter(b => b.status === 'cancelled').length;
+
+        statusChart = new Chart(ctx2, {
+          type: 'doughnut',
+          data: {
+            labels: ['Confirmed', 'Pending', 'Cancelled'],
+            datasets: [{
+              data: [confirmed, pending, cancelled],
+              backgroundColor: ['#48bb78', '#4299e1', '#f56565']
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: true }
+        });
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('[id$="-tab"]').forEach(el => el.style.display = 'none');
+      document.getElementById(`${tab}-tab`).style.display = 'block';
+      document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
+      event.target.closest('.sidebar-link')?.classList.add('active');
+
+      const titles = {
+        overview: 'Dashboard Overview',
+        teams: 'Teams Management',
+        bookings: 'All Bookings',
+        analytics: 'Analytics & Insights'
+      };
+      document.getElementById('page-title').textContent = titles[tab];
+    }
+
+    function openCreateTeamModal() {
+      document.getElementById('create-team-modal').classList.add('active');
+    }
+
+    function closeCreateTeamModal() {
+      document.getElementById('create-team-modal').classList.remove('active');
+    }
+
+    async function createTeam() {
+      const name = document.getElementById('team-name').value;
+      const mode = document.getElementById('team-mode').value;
+
+      if (!name) {
+        alert('Please enter a team name');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/teams`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            name,
+            schedulingMode: mode
+          })
+        });
+
+        if (response.ok) {
+          alert('Team created successfully!');
+          closeCreateTeamModal();
+          document.getElementById('team-name').value = '';
+          await loadDashboardData();
+        } else {
+          alert('Error creating team');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function filterBookings() {
+      // Implementation for booking filter
+    }
+
+    function viewTeam(teamId) {
+      // Implementation for viewing team details
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
 </body>
 </html>
