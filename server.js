@@ -1287,3 +1287,12 @@ app.listen(PORT, () => {
   console.log(`🌐 ${APP_URL}`);
   console.log('');
 });
+
+app.get('/api/debug/env', (req, res) => {
+  res.json({
+    DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    APP_URL: process.env.APP_URL
+  });
+});
