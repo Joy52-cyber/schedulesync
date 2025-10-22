@@ -13,12 +13,16 @@ require('dotenv').config();
 // Optional packages (may not be installed)
 let Resend = null;
 let google = null;
-try {
-  const resend = require('resend');
-  Resend = resend.Resend;
-} catch (e) {
-  console.log('⚠️  Resend email service not configured');
-}
+
+// Resend email service - optional
+// try {
+//   const resend = require('resend');
+//   Resend = resend.Resend;
+// } catch (e) {
+//   console.log('⚠️  Resend email service not configured');
+// }
+
+// Google Calendar API - optional
 try {
   const googleapis = require('googleapis');
   google = googleapis.google;
@@ -129,13 +133,8 @@ if (MICROSOFT_CLIENT_ID && MICROSOFT_CLIENT_SECRET) {
 let resend = null;
 let emailEnabled = false;
 
-if (RESEND_API_KEY) {
-  resend = new Resend(RESEND_API_KEY);
-  emailEnabled = true;
-  console.log('✅ Resend email service configured');
-} else {
-  console.log('⚠️ Resend API key not configured (email disabled)');
-}
+// Resend email service is optional and not installed
+console.log('⚠️ Resend email service not configured (optional)');
 
 // ========================
 // EMAIL FUNCTIONS
