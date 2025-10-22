@@ -726,7 +726,9 @@ process.on('unhandledRejection', (reason) => {
 // START SERVER
 // ========================
 
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('✅ ScheduleSync API Server Running');
   console.log(`📡 Listening on port ${PORT}`);
