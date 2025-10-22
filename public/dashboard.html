@@ -1,385 +1,416 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - ScheduleSync</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 250px; background: #1a202c; overflow-y: auto; z-index: 40; }
-    .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: #cbd5e0; transition: all 0.2s; cursor: pointer; }
-    .sidebar-link:hover { background: #2d3748; color: white; }
-    .sidebar-link.active { background: #667eea; color: white; }
-    .main-content { margin-left: 250px; }
-    .metric-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .metric-value { font-size: 32px; font-weight: bold; color: #1a202c; }
-    .metric-label { color: #718096; font-size: 14px; margin-top: 5px; }
-    .section-title { font-size: 24px; font-weight: bold; color: #1a202c; margin-bottom: 20px; }
-    .fade-in { animation: fadeIn 0.3s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .btn-primary { background: #667eea; color: white; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
-    .btn-primary:hover { background: #5568d3; }
-    .btn-secondary { background: #e2e8f0; color: #1a202c; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
-    .btn-secondary:hover { background: #cbd5e0; }
-    .btn-danger { background: #f56565; color: white; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; }
-    .btn-danger:hover { background: #e53e3e; }
-    .google-card { background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); }
-    .microsoft-card { background: linear-gradient(135deg, #0078D4 0%, #107C10 100%); }
-    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .status-active { background: #c6f6d5; color: #22543d; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .pulse-dot {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="px-6 py-8 border-b border-gray-700">
-      <div class="flex items-center gap-2 mb-2">
-        <div class="text-2xl">📅</div>
-        <div class="font-bold text-white text-lg">ScheduleSync</div>
-      </div>
-      <p class="text-xs text-gray-400">Admin Dashboard</p>
-    </div>
-
-    <div class="py-6">
-      <div class="sidebar-link active" onclick="switchTab('overview', event)">
-        <span>📊</span>
-        <span>Overview</span>
-      </div>
-      <div class="sidebar-link" onclick="switchTab('teams', event)">
-        <span>👥</span>
-        <span>Teams</span>
-      </div>
-      <div class="sidebar-link" onclick="switchTab('bookings', event)">
-        <span>📆</span>
-        <span>Bookings</span>
-      </div>
-      <div class="sidebar-link" onclick="switchTab('integrations', event)">
-        <span>🔗</span>
-        <span>Integrations</span>
-      </div>
-      <div class="sidebar-link" onclick="switchTab('analytics', event)">
-        <span>📈</span>
-        <span>Analytics</span>
-      </div>
-      <div class="sidebar-link" onclick="logout()">
-        <span>🚪</span>
-        <span>Logout</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Main Content -->
-  <div class="main-content">
-    <!-- Top Navigation -->
-    <nav class="gradient-bg text-white shadow-lg sticky top-0 z-30">
-      <div class="px-8 py-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold" id="page-title">Dashboard Overview</h1>
-        <div class="flex items-center gap-4">
-          <span id="user-name">Loading...</span>
-          <button onclick="logout()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Sign Out</button>
+<body class="text-white">
+    <!-- Navigation -->
+    <nav class="glass p-4 mb-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <h1 class="text-2xl font-bold">⚡ ScheduleSync</h1>
+                <div class="hidden md:flex space-x-4">
+                    <a href="/dashboard" class="text-white font-semibold">Dashboard</a>
+                    <a href="/teams" class="hover:text-purple-200">Teams</a>
+                    <a href="/availability" class="hover:text-purple-200">Availability</a>
+                    <a href="/bookings" class="hover:text-purple-200">Bookings</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="hidden md:inline">User</span>
+                <button onclick="logout()" class="px-4 py-2 bg-red-500 rounded-lg hover:bg-red-600 transition">Sign Out</button>
+            </div>
         </div>
-      </div>
     </nav>
 
-    <!-- Page Content -->
-    <div class="p-8">
-      
-      <!-- Overview Tab -->
-      <div id="overview-tab" class="fade-in">
-        <div class="section-title">Dashboard Overview</div>
+    <div class="container mx-auto px-4 pb-8">
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h2 class="text-4xl font-bold mb-2">Welcome back, <span id="userNameDisplay">User</span>! 👋</h2>
+            <p class="text-purple-200">Here's what's happening with your schedule today</p>
+        </div>
+
+        <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div class="metric-card">
-            <div class="metric-value" id="total-teams">0</div>
-            <div class="metric-label">Total Teams</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" id="total-bookings">0</div>
-            <div class="metric-label">Total Bookings</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" id="confirmed-bookings">0</div>
-            <div class="metric-label">Confirmed</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-value" id="pending-bookings">0</div>
-            <div class="metric-label">Pending</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Teams Tab -->
-      <div id="teams-tab" class="fade-in" style="display: none;">
-        <div class="section-title">Teams Management</div>
-        <button onclick="alert('Create team functionality')" class="btn-primary mb-4">+ Create Team</button>
-        <div class="metric-card">
-          <p class="text-gray-600">Your teams will appear here</p>
-        </div>
-      </div>
-
-      <!-- Bookings Tab -->
-      <div id="bookings-tab" class="fade-in" style="display: none;">
-        <div class="section-title">Bookings</div>
-        <div class="metric-card">
-          <p class="text-gray-600">Your bookings will appear here</p>
-        </div>
-      </div>
-
-      <!-- INTEGRATIONS TAB - NEW -->
-      <div id="integrations-tab" class="fade-in" style="display: none;">
-        <div class="section-title">🔗 Calendar Integrations</div>
-        
-        <!-- Connected Calendars -->
-        <div class="metric-card mb-6">
-          <h3 class="text-lg font-bold mb-4">✓ Connected Calendars</h3>
-          <div id="connected-calendars-list">
-            <p class="text-gray-500">Loading your calendars...</p>
-          </div>
-        </div>
-
-        <!-- Connect New Calendars -->
-        <div class="metric-card mb-6">
-          <h3 class="text-lg font-bold mb-6">+ Connect New Calendar</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Google Calendar Card -->
-            <div class="google-card text-white rounded-lg p-8 cursor-pointer hover:shadow-lg transition">
-              <div style="font-size: 40px; margin-bottom: 16px;">🔵</div>
-              <h4 style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Google Calendar</h4>
-              <p style="font-size: 14px; opacity: 0.95; margin-bottom: 20px;">Sync your Google Calendar events and prevent conflicts</p>
-              <button onclick="connectGoogle()" class="w-full py-3 bg-white text-blue-600 font-bold rounded-lg hover:bg-gray-100 transition">
-                Connect Google Calendar
-              </button>
+            <!-- Total Bookings -->
+            <div class="stat-card rounded-lg p-6 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-purple-200 text-sm font-semibold">Total Bookings</span>
+                    <div class="w-10 h-10 bg-blue-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
+                        📅
+                    </div>
+                </div>
+                <div class="text-3xl font-bold mb-1" id="totalBookings">0</div>
+                <div class="text-xs text-purple-200">All time</div>
             </div>
 
-            <!-- Microsoft Outlook Card -->
-            <div class="microsoft-card text-white rounded-lg p-8 cursor-pointer hover:shadow-lg transition">
-              <div style="font-size: 40px; margin-bottom: 16px;">📧</div>
-              <h4 style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Microsoft Outlook</h4>
-              <p style="font-size: 14px; opacity: 0.95; margin-bottom: 20px;">Sync your Outlook Calendar events and prevent conflicts</p>
-              <button onclick="connectMicrosoft()" class="w-full py-3 bg-white text-blue-600 font-bold rounded-lg hover:bg-gray-100 transition">
-                Connect Microsoft Outlook
-              </button>
+            <!-- Upcoming Meetings -->
+            <div class="stat-card rounded-lg p-6 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-purple-200 text-sm font-semibold">Upcoming</span>
+                    <div class="w-10 h-10 bg-green-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
+                        🎯
+                    </div>
+                </div>
+                <div class="text-3xl font-bold mb-1" id="upcomingMeetings">0</div>
+                <div class="text-xs text-purple-200 flex items-center">
+                    <span class="pulse-dot inline-block w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                    Next 7 days
+                </div>
             </div>
-          </div>
+
+            <!-- Completed -->
+            <div class="stat-card rounded-lg p-6 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-purple-200 text-sm font-semibold">Completed</span>
+                    <div class="w-10 h-10 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
+                        ✅
+                    </div>
+                </div>
+                <div class="text-3xl font-bold mb-1" id="completedMeetings">0</div>
+                <div class="text-xs text-purple-200">This month</div>
+            </div>
+
+            <!-- Team Members -->
+            <div class="stat-card rounded-lg p-6 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-purple-200 text-sm font-semibold">Team Members</span>
+                    <div class="w-10 h-10 bg-orange-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
+                        👥
+                    </div>
+                </div>
+                <div class="text-3xl font-bold mb-1" id="teamMembers">0</div>
+                <div class="text-xs text-purple-200">Active</div>
+            </div>
         </div>
 
-        <!-- How It Works -->
-        <div class="metric-card">
-          <h3 class="text-lg font-bold mb-4">📚 How It Works</h3>
-          <div style="background: #f0f4ff; border-left: 4px solid #667eea; padding: 16px; border-radius: 6px;">
-            <p style="margin: 0; color: #1a202c; line-height: 1.8; font-size: 15px;">
-              <strong>Connected calendars automatically prevent double-booking.</strong> When guests book meetings, ScheduleSync checks all your connected calendars and only shows you truly available time slots. You can connect multiple calendars from different providers (Google, Microsoft, etc.).
-            </p>
-          </div>
+        <!-- Quick Actions -->
+        <div class="glass rounded-lg p-6 mb-8">
+            <h3 class="text-2xl font-bold mb-6">Quick Actions</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a href="/teams" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
+                    <div class="text-4xl mb-3">👥</div>
+                    <h4 class="font-bold text-lg mb-2">Create Team</h4>
+                    <p class="text-sm text-purple-200">Set up a new scheduling team</p>
+                </a>
+                
+                <a href="/availability" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
+                    <div class="text-4xl mb-3">📅</div>
+                    <h4 class="font-bold text-lg mb-2">Set Availability</h4>
+                    <p class="text-sm text-purple-200">Update your available time slots</p>
+                </a>
+                
+                <a href="/bookings" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
+                    <div class="text-4xl mb-3">📋</div>
+                    <h4 class="font-bold text-lg mb-2">View Bookings</h4>
+                    <p class="text-sm text-purple-200">Manage all your bookings</p>
+                </a>
+            </div>
         </div>
-      </div>
 
-      <!-- Analytics Tab -->
-      <div id="analytics-tab" class="fade-in" style="display: none;">
-        <div class="section-title">Analytics & Insights</div>
-        <div class="metric-card">
-          <p class="text-gray-600">Analytics data will appear here</p>
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Recent Activity -->
+            <div class="lg:col-span-2 glass rounded-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-bold">Recent Activity</h3>
+                    <button onclick="loadActivity()" class="text-sm text-purple-200 hover:text-white transition">
+                        Refresh
+                    </button>
+                </div>
+                <div id="activityList" class="space-y-3">
+                    <!-- Activity items will be loaded here -->
+                </div>
+                <div id="emptyActivity" class="hidden text-center py-12">
+                    <div class="text-6xl mb-4">📭</div>
+                    <p class="text-purple-200">No recent activity</p>
+                    <p class="text-sm text-purple-300 mt-2">Create a team or set your availability to get started!</p>
+                </div>
+            </div>
+
+            <!-- Calendar Integration & Quick Links -->
+            <div class="space-y-6">
+                <!-- Calendar Status -->
+                <div class="glass rounded-lg p-6">
+                    <h3 class="text-xl font-bold mb-4">Calendar Integration</h3>
+                    <div id="calendarStatus" class="space-y-3">
+                        <!-- Calendar connections will be loaded here -->
+                    </div>
+                    <div id="noCalendars" class="text-center py-6">
+                        <div class="text-4xl mb-3">🔗</div>
+                        <p class="text-sm text-purple-200 mb-4">No calendars connected</p>
+                        <a href="/dashboard#integrations" class="inline-block px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50 transition">
+                            Connect Calendar
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Your Teams -->
+                <div class="glass rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Your Teams</h3>
+                        <a href="/teams" class="text-sm text-purple-200 hover:text-white transition">View All</a>
+                    </div>
+                    <div id="teamsList" class="space-y-2">
+                        <!-- Teams will be loaded here -->
+                    </div>
+                    <div id="noTeams" class="text-center py-6">
+                        <div class="text-4xl mb-3">📋</div>
+                        <p class="text-sm text-purple-200 mb-4">No teams yet</p>
+                        <a href="/teams" class="inline-block px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50 transition">
+                            Create Team
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="glass rounded-lg p-6">
+                    <h3 class="text-xl font-bold mb-4">This Week</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-200 text-sm">Monday</span>
+                            <span class="font-semibold">3 slots</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-200 text-sm">Tuesday</span>
+                            <span class="font-semibold">5 slots</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-200 text-sm">Wednesday</span>
+                            <span class="font-semibold">4 slots</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-200 text-sm">Thursday</span>
+                            <span class="font-semibold">6 slots</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-200 text-sm">Friday</span>
+                            <span class="font-semibold">4 slots</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-
     </div>
-  </div>
 
-  <script>
-    const API_BASE = `${window.location.protocol}//${window.location.host}`;
-    let currentTab = 'overview';
+    <!-- Toast Notification -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 glass px-6 py-4 rounded-lg shadow-lg z-50">
+        <p id="toastMessage"></p>
+    </div>
 
-    // Initialize on page load
-    async function init() {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_BASE}/api/users/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        document.getElementById('user-name').textContent = data.user?.name || 'User';
-      } catch (error) {
-        console.error('Error loading user info:', error);
-      }
-
-      // Load initial data
-      loadDashboardData();
-    }
-
-    async function loadDashboardData() {
-      try {
-        const response = await fetch(`${API_BASE}/api/analytics/dashboard`);
-        const data = await response.json();
-        
-        document.getElementById('total-teams').textContent = data.stats?.totalTeams || 0;
-        document.getElementById('total-bookings').textContent = data.stats?.totalBookings || 0;
-        document.getElementById('confirmed-bookings').textContent = data.stats?.confirmedBookings || 0;
-        document.getElementById('pending-bookings').textContent = data.stats?.pendingBookings || 0;
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      }
-    }
-
-    // Switch between tabs
-    function switchTab(tab, event) {
-      if (event) event.preventDefault();
-      
-      // Hide all tabs
-      document.querySelectorAll('[id$="-tab"]').forEach(el => {
-        el.style.display = 'none';
-      });
-
-      // Show selected tab
-      const tabEl = document.getElementById(tab + '-tab');
-      if (tabEl) {
-        tabEl.style.display = 'block';
-        tabEl.classList.add('fade-in');
-      }
-
-      // Update sidebar active state
-      document.querySelectorAll('.sidebar-link').forEach(link => {
-        link.classList.remove('active');
-      });
-      if (event && event.target) {
-        event.target.closest('.sidebar-link')?.classList.add('active');
-      }
-
-      // Update page title
-      const titles = {
-        'overview': 'Dashboard Overview',
-        'teams': 'Teams Management',
-        'bookings': 'Bookings',
-        'integrations': '🔗 Calendar Integrations',
-        'analytics': 'Analytics & Insights'
-      };
-      document.getElementById('page-title').textContent = titles[tab] || 'Dashboard';
-
-      // Load integrations data if switching to integrations tab
-      if (tab === 'integrations') {
-        loadConnectedCalendars();
-      }
-
-      currentTab = tab;
-    }
-
-    // ========================
-    // CALENDAR INTEGRATION FUNCTIONS
-    // ========================
-
-    async function loadConnectedCalendars() {
-      try {
-        const response = await fetch(`${API_BASE}/api/calendar/connections`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
-        displayConnectedCalendars(data.connections || []);
-      } catch (error) {
-        console.error('Error loading calendars:', error);
-        document.getElementById('connected-calendars-list').innerHTML = '<p class="text-red-500">Error loading calendars</p>';
-      }
-    }
-
-    function displayConnectedCalendars(connections) {
-      if (!connections || connections.length === 0) {
-        document.getElementById('connected-calendars-list').innerHTML = '<p class="text-gray-500">No calendars connected yet. Connect one to get started!</p>';
-        return;
-      }
-
-      const html = connections.map(conn => {
-        const providerIcon = conn.provider === 'google' ? '🔵' : '📧';
-        const providerName = conn.provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook';
-        const lastSync = conn.updated_at ? new Date(conn.updated_at).toLocaleDateString() : 'Never';
-        
-        return `
-          <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-size: 24px; margin-bottom: 8px;">${providerIcon}</div>
-              <p style="font-weight: 600; margin: 0; color: #1a202c; font-size: 16px;">${providerName}</p>
-              <p style="font-size: 12px; color: #718096; margin: 4px 0 0 0;">Connected on ${lastSync}</p>
-              <p style="font-size: 12px; color: #22863a; margin: 4px 0 0 0;">✓ Active & Syncing</p>
-            </div>
-            <button onclick="disconnectCalendar('${conn.provider}')" class="btn-danger">Disconnect</button>
-          </div>
-        `;
-      }).join('');
-
-      document.getElementById('connected-calendars-list').innerHTML = html;
-    }
-
-    async function connectGoogle() {
-      try {
-        const response = await fetch(`${API_BASE}/api/calendar/google/auth`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
-        
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          alert('Google Calendar is not configured on the server. Please check environment variables.');
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
         }
-      } catch (error) {
-        alert('Error connecting to Google Calendar: ' + error.message);
-      }
-    }
 
-    async function connectMicrosoft() {
-      try {
-        const response = await fetch(`${API_BASE}/api/calendar/microsoft/auth`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
-        
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          alert('Microsoft Outlook is not configured on the server. Please check environment variables.');
+        // Load user info
+        async function loadUser() {
+            try {
+                const response = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('userName').textContent = data.user.name;
+                    document.getElementById('userNameDisplay').textContent = data.user.name;
+                } else {
+                    document.getElementById('userName').textContent = 'User';
+                    document.getElementById('userNameDisplay').textContent = 'User';
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+            }
         }
-      } catch (error) {
-        alert('Error connecting to Microsoft Outlook: ' + error.message);
-      }
-    }
 
-    async function disconnectCalendar(provider) {
-      if (!confirm(`Are you sure you want to disconnect ${provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook'}?`)) {
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_BASE}/api/calendar/disconnect`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ provider })
-        });
-
-        if (response.ok) {
-          alert(`${provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook'} disconnected successfully`);
-          loadConnectedCalendars();
-        } else {
-          alert('Error disconnecting calendar');
+        // Load analytics
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/analytics/dashboard', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('totalBookings').textContent = data.totalBookings || 0;
+                    document.getElementById('upcomingMeetings').textContent = data.upcomingMeetings || 0;
+                    document.getElementById('completedMeetings').textContent = data.completedMeetings || 0;
+                    document.getElementById('teamMembers').textContent = data.teamMembers || 0;
+                    
+                    if (data.recentActivity && data.recentActivity.length > 0) {
+                        displayActivity(data.recentActivity);
+                    } else {
+                        document.getElementById('activityList').classList.add('hidden');
+                        document.getElementById('emptyActivity').classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
         }
-      } catch (error) {
-        alert('Error: ' + error.message);
-      }
-    }
 
-    function logout() {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
+        // Display activity
+        function displayActivity(activities) {
+            const list = document.getElementById('activityList');
+            list.classList.remove('hidden');
+            document.getElementById('emptyActivity').classList.add('hidden');
+            
+            list.innerHTML = activities.slice(0, 8).map(activity => `
+                <div class="flex items-start space-x-3 p-3 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition">
+                    <div class="w-10 h-10 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-xl flex-shrink-0">
+                        ${activity.status === 'confirmed' ? '✅' : '⏳'}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-sm truncate">${activity.title || 'Meeting'}</p>
+                        <p class="text-xs text-purple-200">${activity.attendee_name || 'Guest'}</p>
+                        <p class="text-xs text-purple-300">${new Date(activity.start_time).toLocaleDateString()}</p>
+                    </div>
+                    <span class="px-2 py-1 bg-purple-500 bg-opacity-30 rounded text-xs">${activity.status}</span>
+                </div>
+            `).join('');
+        }
 
-    // Initialize when page loads
-    document.addEventListener('DOMContentLoaded', init);
-  </script>
+        // Load teams
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/teams', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const teams = data.teams || [];
+                    
+                    if (teams.length > 0) {
+                        document.getElementById('noTeams').classList.add('hidden');
+                        document.getElementById('teamsList').innerHTML = teams.slice(0, 5).map(team => `
+                            <a href="/teams" class="block p-3 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-sm">
+                                            👥
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-sm">${team.name}</div>
+                                            <div class="text-xs text-purple-200">${team.member_count || 0} members</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs text-purple-200">→</span>
+                                </div>
+                            </a>
+                        `).join('');
+                    } else {
+                        document.getElementById('noTeams').classList.remove('hidden');
+                        document.getElementById('teamsList').innerHTML = '';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading teams:', error);
+            }
+        }
+
+        // Load calendar connections
+        async function loadCalendars() {
+            try {
+                const response = await fetch('/api/calendar/connections', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const connections = data.connections || [];
+                    
+                    if (connections.length > 0) {
+                        document.getElementById('noCalendars').classList.add('hidden');
+                        document.getElementById('calendarStatus').innerHTML = connections.map(conn => `
+                            <div class="flex items-center justify-between p-3 bg-white bg-opacity-5 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-green-500 bg-opacity-30 rounded-lg flex items-center justify-center text-sm">
+                                        ${conn.provider === 'google' ? '📧' : '📮'}
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-sm">${conn.provider === 'google' ? 'Google' : 'Microsoft'}</div>
+                                        <div class="text-xs text-purple-200">${conn.email || 'Connected'}</div>
+                                    </div>
+                                </div>
+                                <span class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></span>
+                            </div>
+                        `).join('');
+                    } else {
+                        document.getElementById('noCalendars').classList.remove('hidden');
+                        document.getElementById('calendarStatus').innerHTML = '';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading calendars:', error);
+            }
+        }
+
+        // Load activity (refresh)
+        async function loadActivity() {
+            await loadAnalytics();
+            showToast('Activity refreshed!');
+        }
+
+        // Show toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        // Initialize
+        loadUser();
+        loadAnalytics();
+        loadTeams();
+        loadCalendars();
+
+        // Refresh data every 30 seconds
+        setInterval(() => {
+            loadAnalytics();
+            loadTeams();
+            loadCalendars();
+        }, 30000);
+    </script>
 </body>
 </html>
