@@ -60,33 +60,35 @@ if (DATABASE_URL) {
 // EMAIL SETUP
 // ========================
 
-const EMAIL_USER = process.env.EMAIL_USER;
-const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+const EMAIL_USER = process.env.EMAIL_USER || '';
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || '';
 const EMAIL_SERVICE = process.env.EMAIL_SERVICE || 'gmail';
 const APP_URL = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
 
 let transporter = null;
 let emailEnabled = false;
 
-if (EMAIL_USER && EMAIL_PASSWORD) {
-  transporter = nodemailer.createTransport({
-    service: EMAIL_SERVICE,
-    auth: {
-      user: EMAIL_USER,
-      pass: EMAIL_PASSWORD
-    }
-  });
+console.log('📧 Email Configuration:');
+console.log('  USER:', EMAIL_USER ? 'SET' : 'NOT SET');
+console.log('  PASSWORD:', EMAIL_PASSWORD ? 'SET' : 'NOT SET');
+console.log('  SERVICE:', EMAIL_SERVICE);
 
-  transporter.verify((error, success) => {
-    if (error) {
-      console.warn('⚠️ Email not configured:', error.message);
-    } else {
-      console.log('✅ Email service ready');
-      emailEnabled = true;
-    }
-  });
+if (EMAIL_USER && EMAIL_PASSWORD) {
+  try {
+    transporter = nodemailer.createTransport({
+      service: EMAIL_SERVICE,
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASSWORD
+      }
+    });
+    emailEnabled = true;
+    console.log('✅ Email transporter created');
+  } catch (e) {
+    console.warn('⚠️ Email transporter error:', e.message);
+  }
 } else {
-  console.warn('⚠️ Email credentials not configured');
+  console.warn('⚠️ Email not configured - no credentials provided');
 }
 
 // Email helper function
@@ -97,16 +99,16 @@ async function sendEmail(to, subject, html) {
   }
 
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `ScheduleSync <${EMAIL_USER}>`,
       to,
       subject,
       html
     });
-    console.log(`✅ Email sent to ${to}`);
+    console.log(`✅ Email sent to ${to} (ID: ${info.messageId})`);
     return true;
   } catch (error) {
-    console.error('❌ Email send error:', error.message);
+    console.error(`❌ Email error for ${to}:`, error.message);
     return false;
   }
 }
@@ -563,26 +565,82 @@ app.post('/api/booking/create', async (req, res) => {
   try {
     if (!pool) return res.status(503).json({ error: 'Database unavailable' });
 
-    const { teamId, slotStart, slotEnd, guestEmail, guestName, description, notes } = req.body;
+    const { teamId, slotStart, slotEnd, guestEmail, guestName, description, notes, meetingLink } = req.body;
 
     if (!teamId || !slotStart || !slotEnd || !guestEmail || !guestName) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const result = await pool.query(
-      `INSERT INTO bookings (team_id, slot_start, slot_end, guest_email, guest_name, description, notes, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+      `INSERT INTO bookings (team_id, slot_start, slot_end, guest_email, guest_name, description, notes, meeting_link, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
        RETURNING *`,
-      [teamId, slotStart, slotEnd, guestEmail, guestName, description || null, notes || null]
+      [teamId, slotStart, slotEnd, guestEmail, guestName, description || null, notes || null, meetingLink || null]
     );
 
     const booking = result.rows[0];
     const confirmationToken = jwt.sign({ bookingId: booking.id }, JWT_SECRET, { expiresIn: '7d' });
 
+    // Get team and member info
+    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [teamId]);
+    const teamName = teamResult.rows[0]?.name || 'Team';
+
+    // Send booking confirmation email to guest
+    const confirmationHtml = getBookingConfirmationEmail(guestName, teamName, slotStart, slotEnd, meetingLink);
+    await sendEmail(guestEmail, `Booking Confirmed with ${teamName}`, confirmationHtml);
+
     console.log(`✅ Booking created: ${booking.id}`);
     res.json({ success: true, booking: { id: booking.id, confirmationToken } });
   } catch (error) {
     console.error('Create booking error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================
+// BOOKING CANCELLATION
+// ========================
+
+app.post('/api/booking/cancel', async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'Database unavailable' });
+
+    const { bookingId, cancelReason } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({ error: 'Booking ID required' });
+    }
+
+    const bookingResult = await pool.query('SELECT * FROM bookings WHERE id = $1', [bookingId]);
+
+    if (bookingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const booking = bookingResult.rows[0];
+
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({ error: 'Booking already cancelled' });
+    }
+
+    // Update booking status
+    await pool.query(
+      `UPDATE bookings SET status = $1, cancelled_at = NOW(), cancellation_reason = $2 WHERE id = $3`,
+      ['cancelled', cancelReason || null, bookingId]
+    );
+
+    // Get team info
+    const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [booking.team_id]);
+    const teamName = teamResult.rows[0]?.name || 'Team';
+
+    // Send cancellation email to guest
+    const cancellationHtml = getBookingCancellationEmail(booking.guest_name, teamName, booking.slot_start);
+    await sendEmail(booking.guest_email, `Booking Cancelled with ${teamName}`, cancellationHtml);
+
+    console.log(`✅ Booking cancelled: ${bookingId}`);
+    res.json({ success: true, message: 'Booking cancelled successfully' });
+  } catch (error) {
+    console.error('Cancel booking error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
