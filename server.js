@@ -1,18 +1,23 @@
-﻿// server.js — static hosting + small mock API so the UI works
+﻿// ------------------------------
+// ScheduleSync Server (clean build)
+// ------------------------------
 const express = require("express");
 const path = require("path");
-const cors = require("cors");
+const nodemailer = require("nodemailer");
+const dotenv = require("dotenv");
+dotenv.config();
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- STATIC ----------
+// ------------------------------
+// Serve static files from /public
+// ------------------------------
 const PUBLIC_DIR = path.join(__dirname, "public");
 app.use(express.static(PUBLIC_DIR));
 
-// auto-redirect .htm → .html (e.g. /booking.htm)
+// Optional redirect .htm → .html
 app.use((req, res, next) => {
   if (req.path.toLowerCase().endsWith(".htm")) {
     return res.redirect(301, req.path + "l");
@@ -20,236 +25,173 @@ app.use((req, res, next) => {
   next();
 });
 
-// Pages
-app.get(["/", "/dashboard", "/dashboard.html"], (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"))
-);
-app.get(["/booking", "/booking.html", "/booking.htm"], (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "booking.html"))
-);
-app.get(["/team-management", "/team-management.html"], (_, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "team-management.html"))
-);
+// ------------------------------
+// Email setup (Gmail or custom SMTP)
+// ------------------------------
+const EMAIL_USER = process.env.EMAIL_USER || "";
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || "";
+const EMAIL_SERVICE = (process.env.EMAIL_SERVICE || "").toLowerCase();
+const EMAIL_HOST = process.env.EMAIL_HOST;
+const EMAIL_PORT = process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : undefined;
+const EMAIL_SECURE = process.env.EMAIL_SECURE
+  ? process.env.EMAIL_SECURE === "true"
+  : undefined;
 
-// ---------- HEALTH ----------
-app.get("/health", (_, res) => {
+let mailer = null;
+let emailConfigured = false;
+
+if (EMAIL_USER && EMAIL_PASSWORD) {
+  emailConfigured = true;
+  if (EMAIL_HOST) {
+    mailer = nodemailer.createTransport({
+      host: EMAIL_HOST,
+      port: EMAIL_PORT ?? 587,
+      secure: EMAIL_SECURE ?? false,
+      auth: { user: EMAIL_USER, pass: EMAIL_PASSWORD },
+    });
+  } else if (EMAIL_SERVICE) {
+    mailer = nodemailer.createTransport({
+      service: EMAIL_SERVICE, // "gmail" etc.
+      auth: { user: EMAIL_USER, pass: EMAIL_PASSWORD },
+    });
+  }
+
+  mailer?.verify((err) => {
+    if (err) console.error("❌ SMTP verify failed:", err.message || err);
+    else console.log("✅ Email service ready");
+  });
+} else {
+  console.warn("⚠️ Email not configured. Set EMAIL_USER and EMAIL_PASSWORD.");
+}
+
+// ------------------------------
+// Health endpoint
+// ------------------------------
+app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     env: process.env.NODE_ENV || "development",
     db: "mock",
+    emailConfigured,
     time: new Date().toISOString(),
   });
 });
 
-// ===================================================================
-//                         MOCK API (in-memory)
-// ===================================================================
+// ------------------------------
+// Email test endpoints
+// ------------------------------
+app.post("/api/email/test", async (req, res) => {
+  try {
+    if (!mailer) return res.status(400).json({ success: false, error: "Email not configured" });
 
-// Simple in-memory store (resets on restart)
-let seq = 1;
-const nextId = () => seq++;
+    const to = (req.body?.to || EMAIL_USER || "").trim();
+    if (!to.includes("@")) return res.status(400).json({ success: false, error: "Invalid recipient" });
 
-const users = [];           // { id, email, name }
-const teams = [];           // { id, name, description, public_url, scheduling_mode, created_by }
-const teamMembers = [];     // { team_id, user_id, role, booking_count, joined_at }
+    const APP_URL = (process.env.APP_URL || "").replace(/\/+$/, "");
+    const html = `
+      <div style="font-family:Arial;padding:16px;max-width:640px;margin:auto">
+        <h2>ScheduleSync SMTP Test</h2>
+        <p>This is a test email from your production server.</p>
+        <p>APP_URL: <code>${APP_URL}</code></p>
+      </div>
+    `;
 
-// Seed a default user + team so the page has something
-function seedOnce() {
-  if (users.length) return;
-
-  const owner = { id: nextId(), email: "demo@schedulesync.com", name: "Demo User" };
-  users.push(owner);
-
-  const t = {
-    id: nextId(),
-    name: "Sales Team",
-    description: "Inbound sales demos",
-    public_url: "team-sales",
-    scheduling_mode: "round_robin",
-    created_by: owner.id,
-  };
-  teams.push(t);
-
-  teamMembers.push({
-    team_id: t.id,
-    user_id: owner.id,
-    role: "admin",
-    booking_count: 0,
-    joined_at: new Date().toISOString(),
-  });
-}
-seedOnce();
-
-// ------- tiny auth helper -------
-function auth(req, res, next) {
-  // Accept ANY token for the mock; if missing, create a demo token automatically
-  const hdr = req.headers.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
-
-  // When no token, treat as demo user (id of first user)
-  req.userId = users[0]?.id || 1;
-  next();
-}
-
-// ---------- AUTH ----------
-app.post("/api/auth/register", (req, res) => {
-  const { email, name } = req.body || {};
-  if (!email) return res.status(400).json({ error: "email required" });
-
-  let user = users.find(u => u.email === email);
-  if (!user) {
-    user = { id: nextId(), email, name: name || email.split("@")[0] };
-    users.push(user);
-  }
-
-  // Return a fake token and the user
-  return res.json({ token: "demo-token", user });
-});
-
-// ---------- TEAMS ----------
-app.get("/api/teams", auth, (req, res) => {
-  const myTeamIds = teamMembers.filter(tm => tm.user_id === req.userId).map(tm => tm.team_id);
-
-  const result = teams
-    .filter(t => myTeamIds.includes(t.id))
-    .map(t => ({
-      ...t,
-      member_count: teamMembers.filter(tm => tm.team_id === t.id).length,
-    }));
-
-  res.json({ teams: result });
-});
-
-app.post("/api/teams", auth, (req, res) => {
-  const { name, schedulingMode, publicUrl } = req.body || {};
-  if (!name) return res.status(400).json({ error: "name required" });
-
-  const team = {
-    id: nextId(),
-    name,
-    description: "",
-    public_url: publicUrl || name.toLowerCase().replace(/\s+/g, "-"),
-    scheduling_mode: schedulingMode || "round_robin",
-    created_by: req.userId,
-  };
-  teams.push(team);
-
-  teamMembers.push({
-    team_id: team.id,
-    user_id: req.userId,
-    role: "admin",
-    booking_count: 0,
-    joined_at: new Date().toISOString(),
-  });
-
-  res.json({ success: true, team });
-});
-
-app.get("/api/teams/:teamId", auth, (req, res) => {
-  const id = Number(req.params.teamId);
-  const team = teams.find(t => t.id === id);
-  if (!team) return res.status(404).json({ error: "Team not found" });
-
-  const myRole = teamMembers.find(tm => tm.team_id === id && tm.user_id === req.userId);
-  if (!myRole) return res.status(403).json({ error: "Not a team member" });
-
-  const members = teamMembers
-    .filter(tm => tm.team_id === id)
-    .map(tm => {
-      const u = users.find(x => x.id === tm.user_id);
-      return {
-        id: tm.user_id,
-        email: u?.email || "unknown@example.com",
-        name: u?.name || "",
-        role: tm.role,
-        booking_count: tm.booking_count || 0,
-        last_booked_at: null,
-        joined_at: tm.joined_at,
-      };
+    const info = await mailer.sendMail({
+      from: `ScheduleSync <${EMAIL_USER}>`,
+      to,
+      subject: "ScheduleSync: SMTP Test",
+      html,
+      text: "This is a test email from ScheduleSync.",
     });
 
-  res.json({ team, members, userRole: myRole.role });
+    res.json({ success: true, to, messageId: info.messageId, response: info.response });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || String(err) });
+  }
 });
 
-app.put("/api/teams/:teamId", auth, (req, res) => {
-  const id = Number(req.params.teamId);
-  const team = teams.find(t => t.id === id);
-  if (!team) return res.status(404).json({ error: "Team not found" });
+// GET fallback (useful for quick test in browser)
+app.get("/api/email/test", async (req, res) => {
+  try {
+    if (!mailer) return res.status(400).json({ success: false, error: "Email not configured" });
 
-  const me = teamMembers.find(tm => tm.team_id === id && tm.user_id === req.userId);
-  if (!me || me.role !== "admin") return res.status(403).json({ error: "Only admins can update team" });
+    const to = (req.query.to || EMAIL_USER || "").trim();
+    if (!to.includes("@")) return res.status(400).json({ success: false, error: "Invalid recipient" });
 
-  const { name, description, schedulingMode } = req.body || {};
-  if (name) team.name = name;
-  if (typeof description === "string") team.description = description;
-  if (schedulingMode) team.scheduling_mode = schedulingMode;
-
-  res.json({ success: true, team });
-});
-
-app.post("/api/teams/:teamId/members", auth, (req, res) => {
-  const id = Number(req.params.teamId);
-  const team = teams.find(t => t.id === id);
-  if (!team) return res.status(404).json({ error: "Team not found" });
-
-  const me = teamMembers.find(tm => tm.team_id === id && tm.user_id === req.userId);
-  if (!me || me.role !== "admin") return res.status(403).json({ error: "Only admins can add members" });
-
-  const { userId, role } = req.body || {};
-  if (!userId) return res.status(400).json({ error: "userId required" });
-
-  const exists = teamMembers.find(tm => tm.team_id === id && tm.user_id === Number(userId));
-  if (!exists) {
-    teamMembers.push({
-      team_id: id,
-      user_id: Number(userId),
-      role: role || "member",
-      booking_count: 0,
-      joined_at: new Date().toISOString(),
+    const info = await mailer.sendMail({
+      from: `ScheduleSync <${EMAIL_USER}>`,
+      to,
+      subject: "ScheduleSync: SMTP Test (GET)",
+      html: "<p>This is a GET fallback test email.</p>",
+      text: "GET fallback test email.",
     });
+
+    res.json({ success: true, to, messageId: info.messageId, response: info.response });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || String(err) });
   }
-
-  res.json({ success: true });
 });
 
-app.delete("/api/teams/:teamId/members/:userId", auth, (req, res) => {
-  const teamId = Number(req.params.teamId);
-  const userId = Number(req.params.userId);
-
-  const me = teamMembers.find(tm => tm.team_id === teamId && tm.user_id === req.userId);
-  if (!me || me.role !== "admin") return res.status(403).json({ error: "Only admins can remove members" });
-
-  const idx = teamMembers.findIndex(tm => tm.team_id === teamId && tm.user_id === userId);
-  if (idx >= 0) teamMembers.splice(idx, 1);
-
-  res.json({ success: true });
+// ------------------------------
+// Mock API for Teams (frontend demo)
+// ------------------------------
+app.get("/api/teams", (req, res) => {
+  res.json({
+    teams: [
+      {
+        id: 1,
+        name: "Demo Team",
+        scheduling_mode: "round_robin",
+        member_count: 3,
+        public_url: "demo-team",
+      },
+      {
+        id: 2,
+        name: "Product QA",
+        scheduling_mode: "collective",
+        member_count: 4,
+        public_url: "qa-team",
+      },
+    ],
+  });
 });
 
-app.put("/api/teams/:teamId/members/:userId/role", auth, (req, res) => {
-  const teamId = Number(req.params.teamId);
-  const userId = Number(req.params.userId);
-  const { role } = req.body || {};
-
-  const me = teamMembers.find(tm => tm.team_id === teamId && tm.user_id === req.userId);
-  if (!me || me.role !== "admin") return res.status(403).json({ error: "Only admins can change roles" });
-
-  const tm = teamMembers.find(x => x.team_id === teamId && x.user_id === userId);
-  if (!tm) return res.status(404).json({ error: "Team member not found" });
-
-  if (!["admin", "member", "viewer"].includes(role)) {
-    return res.status(400).json({ error: "Invalid role" });
-  }
-  tm.role = role;
-  res.json({ success: true, member: tm });
+app.get("/api/teams/:id", (req, res) => {
+  const { id } = req.params;
+  res.json({
+    team: {
+      id,
+      name: id === "1" ? "Demo Team" : "Product QA",
+      description: "Sample description for testing.",
+      scheduling_mode: id === "1" ? "round_robin" : "collective",
+      public_url: id === "1" ? "demo-team" : "qa-team",
+    },
+    members: [
+      { id: 1, email: "admin@schedulesync.com", role: "admin" },
+      { id: 2, email: "member@schedulesync.com", role: "member" },
+    ],
+  });
 });
 
-// Minimal activity feed endpoint
-app.get("/api/member/bookings", auth, (req, res) => {
-  res.json({ bookings: [] });
+// ------------------------------
+// Page routes
+// ------------------------------
+app.get(["/", "/dashboard", "/dashboard.html"], (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
 });
 
-// ---------- START ----------
-const PORT = process.env.PORT || 8080;
+app.get(["/booking", "/booking.html", "/booking.htm"], (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "booking.html"));
+});
+
+app.get(["/team-management", "/team-management.html"], (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "team-management.html"));
+});
+
+// ------------------------------
+// Start server
+// ------------------------------
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Listening on http://localhost:${PORT}`);
 });
