@@ -295,22 +295,8 @@ async function start() {
   await tryConfigureEmail();
 
   const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => {
-    console.log("");
-    console.log("✅ ScheduleSync API Server Running");
-    console.log(`📡 Listening on http://localhost:${PORT}`);
-    if (process.env.RAILWAY_STATIC_URL) {
-      console.log(`🌐 Public: ${process.env.RAILWAY_STATIC_URL}`);
-    }
-    console.log(
-      emailConfigured
-        ? "📧 Email configured."
-        : "📭 Email not configured; skipping SMTP verify."
-    );
-    console.log(`🗄️  DB mode: ${dbStatus}`);
-    console.log("");
-  });
-}
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 // graceful shutdown
 process.on("SIGTERM", () => {
