@@ -397,10 +397,10 @@ app.get('/api/calendar/connections', authenticateToken, async (req, res) => {
     const userId = req.userId;
     
     const result = await pool.query(
-      `SELECT id, provider, email, is_active, created_at, last_synced
+      `SELECT id, provider, email, is_active, last_synced
        FROM calendar_connections
        WHERE user_id = $1
-       ORDER BY created_at DESC`,
+       ORDER BY id DESC`,
       [userId]
     );
 
@@ -416,8 +416,13 @@ app.get('/api/calendar/google/auth', authenticateToken, (req, res) => {
   const googleClientId = GOOGLE_CLIENT_ID;
   const redirectUri = `${process.env.BASE_URL || 'https://schedulesync-production.up.railway.app'}/api/calendar/google/callback`;
   
-  if (!googleClientId || googleClientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') {
-    return res.status(400).json({ 
+  // Check if credentials are properly configured (not default values)
+  const isConfigured = googleClientId && 
+                       googleClientId !== 'YOUR_GOOGLE_CLIENT_ID_HERE' &&
+                       googleClientId.length > 20;
+  
+  if (!isConfigured) {
+    return res.json({ 
       error: 'Google Calendar not configured',
       configured: false
     });
@@ -443,9 +448,14 @@ app.get('/api/calendar/microsoft/auth', authenticateToken, (req, res) => {
   const microsoftClientId = MICROSOFT_CLIENT_ID;
   const redirectUri = `${process.env.BASE_URL || 'https://schedulesync-production.up.railway.app'}/api/calendar/microsoft/callback`;
   
-  if (!microsoftClientId || microsoftClientId === 'YOUR_MICROSOFT_CLIENT_ID_HERE') {
-    return res.status(400).json({ 
-      error: 'Microsoft Calendar not configured',
+  // Check if credentials are properly configured (not default values)
+  const isConfigured = microsoftClientId && 
+                       microsoftClientId !== 'YOUR_MICROSOFT_CLIENT_ID_HERE' &&
+                       microsoftClientId.length > 20;
+  
+  if (!isConfigured) {
+    return res.json({ 
+      error: 'Microsoft Outlook not configured',
       configured: false
     });
   }
