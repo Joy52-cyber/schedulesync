@@ -251,6 +251,224 @@ app.get('/api/analytics/dashboard', async (req, res) => {
   }
 });
 
+/* ============================================================================
+   TEAMS API ENDPOINTS
+   ========================================================================== */
+
+// Get all teams for current user
+app.get('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      `SELECT t.*, COUNT(tm.id) as member_count
+       FROM teams t
+       LEFT JOIN team_members tm ON t.id = tm.team_id
+       WHERE t.owner_id = $1
+       GROUP BY t.id
+       ORDER BY t.created_at DESC`,
+      [userId]
+    );
+    res.json({ teams: result.rows });
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
+// Create new team
+app.post('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const userId = req.userId;
+    const result = await pool.query(
+      `INSERT INTO teams (name, description, owner_id, public_url)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, description, userId, Math.random().toString(36).substring(7)]
+    );
+    res.status(201).json({ team: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating team:', error);
+    res.status(500).json({ error: 'Failed to create team' });
+  }
+});
+
+// Update team
+app.put('/api/teams/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const userId = req.userId;
+    const result = await pool.query(
+      `UPDATE teams SET name = $1, description = $2
+       WHERE id = $3 AND owner_id = $4 RETURNING *`,
+      [name, description, id, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json({ team: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating team:', error);
+    res.status(500).json({ error: 'Failed to update team' });
+  }
+});
+
+// Delete team
+app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    const result = await pool.query(
+      'DELETE FROM teams WHERE id = $1 AND owner_id = $2 RETURNING *',
+      [id, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting team:', error);
+    res.status(500).json({ error: 'Failed to delete team' });
+  }
+});
+
+// Get team members
+app.get('/api/teams/:id/members', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT tm.*, u.name, u.email
+       FROM team_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.team_id = $1
+       ORDER BY tm.joined_at DESC`,
+      [id]
+    );
+    res.json({ members: result.rows });
+  } catch (error) {
+    console.error('Error fetching members:', error);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+// Add team member
+app.post('/api/teams/:id/members', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+    const userResult = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const userId = userResult.rows[0].id;
+    const result = await pool.query(
+      `INSERT INTO team_members (team_id, user_id, role)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [id, userId, 'member']
+    );
+    res.status(201).json({ member: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'User already in team' });
+    }
+    console.error('Error adding member:', error);
+    res.status(500).json({ error: 'Failed to add member' });
+  }
+});
+
+// Get team availability
+app.get('/api/teams/:id/availability', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT slot_start, slot_end, is_available
+       FROM time_slots WHERE team_id = $1 ORDER BY slot_start`,
+      [id]
+    );
+    res.json({ slots: result.rows });
+  } catch (error) {
+    console.error('Error fetching availability:', error);
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
+// Save team availability
+app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { availability } = req.body;
+    const userId = req.userId;
+    await pool.query(
+      'DELETE FROM time_slots WHERE team_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving availability:', error);
+    res.status(500).json({ error: 'Failed to save availability' });
+  }
+});
+
+// Get public team info (no auth required)
+app.get('/api/teams/:id/public', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT id, name, description FROM teams WHERE id = $1 OR public_url = $1',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching public team:', error);
+    res.status(500).json({ error: 'Failed to fetch team' });
+  }
+});
+
+/* ============================================================================
+   BOOKINGS API ENDPOINTS
+   ========================================================================== */
+
+// Create booking (public - no auth required)
+app.post('/api/bookings', async (req, res) => {
+  try {
+    const { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
+    const result = await pool.query(
+      `INSERT INTO bookings (team_id, slot_id, guest_name, guest_email, guest_notes, status)
+       VALUES ($1, 1, $2, $3, $4, 'pending') RETURNING *`,
+      [team_id, guest_name, guest_email, guest_notes || '']
+    );
+    res.status(201).json({ booking: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    res.status(500).json({ error: 'Failed to create booking' });
+  }
+});
+
+// Get all bookings for user
+app.get('/api/bookings', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      `SELECT b.*, t.name as team_name
+       FROM bookings b
+       JOIN teams t ON b.team_id = t.id
+       WHERE t.owner_id = $1
+       ORDER BY b.created_at DESC`,
+      [userId]
+    );
+    res.json({ bookings: result.rows });
+  } catch (error) {
+    console.error('Error fetching bookings:', error);
+    res.status(500).json({ error: 'Failed to fetch bookings' });
+  }
+});
+
 /* -------------------------- Calendar: Connections ------------------------- */
 app.get('/api/calendar/connections', async (req, res) => {
   let userId = null;
@@ -352,6 +570,10 @@ app.get('/api/config/status', (_req, res) => {
 app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/booking', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
+app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'teams.html')));
+app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'availability.html')));
+app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
+app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'bookings.html')));
 
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

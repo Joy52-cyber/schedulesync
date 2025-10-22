@@ -1,166 +1,458 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Management - ScheduleSync</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-  </style>
-</head>
-<body class="bg-gray-100">
-  <!-- Header -->
-  <nav class="gradient-bg text-white shadow-lg">
-    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-      <div class="flex items-center gap-2">
-        <div class="text-2xl">📅</div>
-        <div class="font-bold text-xl">ScheduleSync</div>
-      </div>
-      <div class="flex gap-4">
-        <a href="/dashboard" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Dashboard</a>
-        <button onclick="logout()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">Logout</button>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Main Content -->
-  <div class="max-w-4xl mx-auto px-6 py-12">
-    <div class="bg-white rounded-lg shadow-xl p-8">
-      <h1 class="text-3xl font-bold mb-2">Team Management</h1>
-      <p class="text-gray-600 mb-8">Create and manage your teams</p>
-
-      <!-- Create Team Section -->
-      <div class="border-b pb-8 mb-8">
-        <h2 class="text-xl font-semibold mb-4">Create New Team</h2>
-        <form id="createTeamForm" onsubmit="handleCreateTeam(event)">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Team Name</label>
-            <input type="text" id="teamName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea id="teamDescription" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" rows="3"></textarea>
-          </div>
-
-          <button type="submit" class="gradient-bg text-white font-semibold px-6 py-2 rounded-lg hover:shadow-lg transition">
-            Create Team
-          </button>
-        </form>
-      </div>
-
-      <!-- Teams List -->
-      <div>
-        <h2 class="text-xl font-semibold mb-4">Your Teams</h2>
-        <div id="teamsList" class="space-y-4">
-          <p class="text-gray-500">Loading teams...</p>
-        </div>
-      </div>
-
-      <!-- Message -->
-      <div id="message" class="mt-4 p-4 rounded-lg hidden"></div>
-    </div>
-  </div>
-
-  <script>
-    const API_BASE = `${window.location.protocol}//${window.location.host}`;
-
-    // Check authentication
-    if (!localStorage.getItem('token')) {
-      window.location.href = '/login';
-    }
-
-    // Load teams on page load
-    loadTeams();
-
-    async function loadTeams() {
-      try {
-        const response = await fetch(`${API_BASE}/api/teams`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-
-        const data = await response.json();
-        displayTeams(data.teams || []);
-      } catch (error) {
-        showMessage('Error loading teams: ' + error.message, 'error');
-      }
-    }
-
-    function displayTeams(teams) {
-      const teamsList = document.getElementById('teamsList');
-
-      if (!teams || teams.length === 0) {
-        teamsList.innerHTML = '<p class="text-gray-500">You haven\'t created any teams yet. Create your first team above!</p>';
-        return;
-      }
-
-      const html = teams.map(team => `
-        <div class="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
-          <h3 class="text-lg font-semibold text-gray-900">${team.name}</h3>
-          <p class="text-gray-600 text-sm mt-1">${team.description || 'No description'}</p>
-          <div class="mt-4 flex gap-2">
-            <button onclick="alert('Team details coming soon')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
-              Manage
-            </button>
-            <button onclick="copyPublicLink('${team.public_url}')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition text-sm">
-              Copy Link
-            </button>
-          </div>
-        </div>
-      `).join('');
-
-      teamsList.innerHTML = html;
-    }
-
-    async function handleCreateTeam(event) {
-      event.preventDefault();
-
-      const name = document.getElementById('teamName').value;
-      const description = document.getElementById('teamDescription').value;
-
-      try {
-        const response = await fetch(`${API_BASE}/api/teams`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ name, description })
-        });
-
-        const data = await response.json();
-
-        if (data.team) {
-          showMessage('✅ Team created successfully!', 'success');
-          document.getElementById('createTeamForm').reset();
-          loadTeams();
-        } else {
-          showMessage(data.error || 'Failed to create team', 'error');
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teams - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
-      } catch (error) {
-        showMessage('Error: ' + error.message, 'error');
-      }
-    }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body class="text-white">
+    <!-- Navigation -->
+    <nav class="glass p-4 mb-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <h1 class="text-2xl font-bold">⚡ ScheduleSync</h1>
+                <div class="hidden md:flex space-x-4">
+                    <a href="/dashboard" class="hover:text-purple-200">Dashboard</a>
+                    <a href="/teams" class="text-white font-semibold">Teams</a>
+                    <a href="/availability" class="hover:text-purple-200">Availability</a>
+                    <a href="/bookings" class="hover:text-purple-200">Bookings</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="hidden md:inline">User</span>
+                <button onclick="logout()" class="px-4 py-2 bg-red-500 rounded-lg hover:bg-red-600">Sign Out</button>
+            </div>
+        </div>
+    </nav>
 
-    function copyPublicLink(url) {
-      const bookingLink = `${window.location.origin}/booking?team=${url}`;
-      navigator.clipboard.writeText(bookingLink);
-      showMessage('✅ Booking link copied to clipboard!', 'success');
-    }
+    <div class="container mx-auto px-4 pb-8">
+        <!-- Header -->
+        <div class="mb-8 flex justify-between items-center">
+            <div>
+                <h2 class="text-4xl font-bold mb-2">Your Teams</h2>
+                <p class="text-purple-200">Create and manage your scheduling teams</p>
+            </div>
+            <button onclick="openCreateTeamModal()" class="px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition">
+                + Create Team
+            </button>
+        </div>
 
-    function showMessage(msg, type) {
-      const messageDiv = document.getElementById('message');
-      messageDiv.textContent = msg;
-      messageDiv.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
-      messageDiv.classList.add(type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700');
-      setTimeout(() => messageDiv.classList.add('hidden'), 5000);
-    }
+        <!-- Teams Grid -->
+        <div id="teamsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Teams will be loaded here -->
+        </div>
 
-    function logout() {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-  </script>
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-16">
+            <div class="glass rounded-lg p-12 max-w-md mx-auto">
+                <div class="text-6xl mb-4">📋</div>
+                <h3 class="text-2xl font-bold mb-2">No Teams Yet</h3>
+                <p class="text-purple-200 mb-6">Create your first team to start scheduling!</p>
+                <button onclick="openCreateTeamModal()" class="px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50">
+                    Create Your First Team
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Team Modal -->
+    <div id="teamModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="glass rounded-lg p-8 max-w-md w-full">
+            <h3 id="modalTitle" class="text-2xl font-bold mb-6">Create Team</h3>
+            <form id="teamForm" onsubmit="saveTeam(event)">
+                <input type="hidden" id="teamId">
+                
+                <div class="mb-4">
+                    <label class="block mb-2 font-semibold">Team Name</label>
+                    <input type="text" id="teamName" required 
+                           class="w-full px-4 py-2 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white placeholder-purple-200"
+                           placeholder="e.g., Sales Team">
+                </div>
+
+                <div class="mb-6">
+                    <label class="block mb-2 font-semibold">Description</label>
+                    <textarea id="teamDescription" rows="3"
+                              class="w-full px-4 py-2 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white placeholder-purple-200"
+                              placeholder="What is this team for?"></textarea>
+                </div>
+
+                <div class="flex space-x-3">
+                    <button type="submit" class="flex-1 px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50">
+                        Save Team
+                    </button>
+                    <button type="button" onclick="closeTeamModal()" class="flex-1 px-6 py-3 bg-red-500 rounded-lg font-semibold hover:bg-red-600">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Team Modal -->
+    <div id="viewTeamModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="glass rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 id="viewTeamName" class="text-2xl font-bold mb-2"></h3>
+                    <p id="viewTeamDescription" class="text-purple-200"></p>
+                </div>
+                <button onclick="closeViewTeamModal()" class="text-2xl">&times;</button>
+            </div>
+
+            <!-- Public URL -->
+            <div class="mb-6 p-4 bg-white bg-opacity-10 rounded-lg">
+                <label class="block mb-2 text-sm font-semibold">Public Booking URL</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="publicUrl" readonly 
+                           class="flex-1 px-3 py-2 bg-white bg-opacity-20 rounded text-sm">
+                    <button onclick="copyPublicUrl()" class="px-4 py-2 bg-white text-purple-600 rounded font-semibold hover:bg-purple-50">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Team Members -->
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-xl font-semibold">Team Members</h4>
+                    <button onclick="openAddMemberForm()" class="px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50">
+                        + Add Member
+                    </button>
+                </div>
+                <div id="membersList" class="space-y-2">
+                    <!-- Members will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex space-x-3">
+                <button onclick="editCurrentTeam()" class="flex-1 px-6 py-3 bg-blue-500 rounded-lg font-semibold hover:bg-blue-600">
+                    Edit Team
+                </button>
+                <button onclick="deleteCurrentTeam()" class="flex-1 px-6 py-3 bg-red-500 rounded-lg font-semibold hover:bg-red-600">
+                    Delete Team
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 glass px-6 py-4 rounded-lg shadow-lg z-50">
+        <p id="toastMessage"></p>
+    </div>
+
+    <script>
+        let currentTeamId = null;
+        let teams = [];
+
+        // Check authentication
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Load user info
+        async function loadUser() {
+            try {
+                const response = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('userName').textContent = data.user.name;
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+            }
+        }
+
+        // Load teams
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/teams', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    teams = data.teams || [];
+                    displayTeams();
+                } else {
+                    teams = [];
+                    displayTeams();
+                }
+            } catch (error) {
+                console.error('Error loading teams:', error);
+                showToast('Failed to load teams');
+            }
+        }
+
+        // Display teams
+        function displayTeams() {
+            const grid = document.getElementById('teamsGrid');
+            const empty = document.getElementById('emptyState');
+
+            if (teams.length === 0) {
+                grid.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            empty.classList.add('hidden');
+
+            grid.innerHTML = teams.map(team => `
+                <div class="glass rounded-lg p-6 card-hover cursor-pointer" onclick="viewTeam(${team.id})">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center text-2xl">
+                            👥
+                        </div>
+                        <span class="px-3 py-1 bg-purple-500 bg-opacity-50 rounded-full text-sm">
+                            ${team.member_count || 0} members
+                        </span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">${team.name}</h3>
+                    <p class="text-purple-200 text-sm mb-4 line-clamp-2">${team.description || 'No description'}</p>
+                    <div class="text-xs text-purple-200">
+                        Created ${new Date(team.created_at).toLocaleDateString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Modal functions
+        function openCreateTeamModal() {
+            document.getElementById('modalTitle').textContent = 'Create Team';
+            document.getElementById('teamId').value = '';
+            document.getElementById('teamName').value = '';
+            document.getElementById('teamDescription').value = '';
+            document.getElementById('teamModal').classList.remove('hidden');
+        }
+
+        function closeTeamModal() {
+            document.getElementById('teamModal').classList.add('hidden');
+        }
+
+        function closeViewTeamModal() {
+            document.getElementById('viewTeamModal').classList.add('hidden');
+            currentTeamId = null;
+        }
+
+        // Save team
+        async function saveTeam(event) {
+            event.preventDefault();
+            
+            const teamId = document.getElementById('teamId').value;
+            const name = document.getElementById('teamName').value;
+            const description = document.getElementById('teamDescription').value;
+
+            const url = teamId ? `/api/teams/${teamId}` : '/api/teams';
+            const method = teamId ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name, description })
+                });
+
+                if (response.ok) {
+                    showToast(teamId ? 'Team updated!' : 'Team created!');
+                    closeTeamModal();
+                    loadTeams();
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || 'Failed to save team');
+                }
+            } catch (error) {
+                console.error('Error saving team:', error);
+                showToast('Failed to save team');
+            }
+        }
+
+        // View team details
+        async function viewTeam(teamId) {
+            currentTeamId = teamId;
+            const team = teams.find(t => t.id === teamId);
+            
+            if (!team) return;
+
+            document.getElementById('viewTeamName').textContent = team.name;
+            document.getElementById('viewTeamDescription').textContent = team.description || 'No description';
+            document.getElementById('publicUrl').value = `${window.location.origin}/book/${team.public_url || team.id}`;
+            
+            // Load team members
+            await loadTeamMembers(teamId);
+            
+            document.getElementById('viewTeamModal').classList.remove('hidden');
+        }
+
+        // Load team members
+        async function loadTeamMembers(teamId) {
+            try {
+                const response = await fetch(`/api/teams/${teamId}/members`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayMembers(data.members || []);
+                } else {
+                    displayMembers([]);
+                }
+            } catch (error) {
+                console.error('Error loading members:', error);
+                displayMembers([]);
+            }
+        }
+
+        // Display members
+        function displayMembers(members) {
+            const list = document.getElementById('membersList');
+            
+            if (members.length === 0) {
+                list.innerHTML = '<p class="text-purple-200 text-center py-4">No members yet</p>';
+                return;
+            }
+
+            list.innerHTML = members.map(member => `
+                <div class="flex justify-between items-center p-3 bg-white bg-opacity-10 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center font-semibold">
+                            ${member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div class="font-semibold">${member.name}</div>
+                            <div class="text-sm text-purple-200">${member.email}</div>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-purple-500 bg-opacity-50 rounded-full text-xs">
+                        ${member.role}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        // Edit current team
+        function editCurrentTeam() {
+            const team = teams.find(t => t.id === currentTeamId);
+            if (!team) return;
+
+            document.getElementById('modalTitle').textContent = 'Edit Team';
+            document.getElementById('teamId').value = team.id;
+            document.getElementById('teamName').value = team.name;
+            document.getElementById('teamDescription').value = team.description || '';
+            
+            closeViewTeamModal();
+            document.getElementById('teamModal').classList.remove('hidden');
+        }
+
+        // Delete current team
+        async function deleteCurrentTeam() {
+            if (!confirm('Are you sure you want to delete this team? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${currentTeamId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    showToast('Team deleted');
+                    closeViewTeamModal();
+                    loadTeams();
+                } else {
+                    showToast('Failed to delete team');
+                }
+            } catch (error) {
+                console.error('Error deleting team:', error);
+                showToast('Failed to delete team');
+            }
+        }
+
+        // Copy public URL
+        function copyPublicUrl() {
+            const input = document.getElementById('publicUrl');
+            input.select();
+            document.execCommand('copy');
+            showToast('URL copied to clipboard!');
+        }
+
+        // Add member form (placeholder)
+        function openAddMemberForm() {
+            const email = prompt('Enter team member email:');
+            if (email) {
+                addTeamMember(email);
+            }
+        }
+
+        // Add team member
+        async function addTeamMember(email) {
+            try {
+                const response = await fetch(`/api/teams/${currentTeamId}/members`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                if (response.ok) {
+                    showToast('Member added!');
+                    loadTeamMembers(currentTeamId);
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || 'Failed to add member');
+                }
+            } catch (error) {
+                console.error('Error adding member:', error);
+                showToast('Failed to add member');
+            }
+        }
+
+        // Show toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        // Initialize
+        loadUser();
+        loadTeams();
+    </script>
 </body>
 </html>

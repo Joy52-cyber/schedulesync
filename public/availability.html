@@ -1,0 +1,346 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Availability - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .time-slot {
+            transition: all 0.2s ease;
+        }
+        .time-slot:hover {
+            transform: scale(1.05);
+        }
+        .time-slot.available {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #22c55e;
+        }
+        .time-slot.unavailable {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <!-- Navigation -->
+    <nav class="glass p-4 mb-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <h1 class="text-2xl font-bold">⚡ ScheduleSync</h1>
+                <div class="hidden md:flex space-x-4">
+                    <a href="/dashboard" class="hover:text-purple-200">Dashboard</a>
+                    <a href="/teams" class="hover:text-purple-200">Teams</a>
+                    <a href="/availability" class="text-white font-semibold">Availability</a>
+                    <a href="/bookings" class="hover:text-purple-200">Bookings</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="hidden md:inline">User</span>
+                <button onclick="logout()" class="px-4 py-2 bg-red-500 rounded-lg hover:bg-red-600">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 pb-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h2 class="text-4xl font-bold mb-2">Your Availability</h2>
+            <p class="text-purple-200">Set when you're available for meetings</p>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="glass rounded-lg p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block mb-2 font-semibold text-sm">Time Zone</label>
+                    <select id="timezone" class="w-full px-4 py-2 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white">
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">Eastern Time</option>
+                        <option value="America/Chicago">Central Time</option>
+                        <option value="America/Denver">Mountain Time</option>
+                        <option value="America/Los_Angeles">Pacific Time</option>
+                        <option value="Asia/Manila" selected>Philippine Time</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block mb-2 font-semibold text-sm">Select Team</label>
+                    <select id="teamSelect" onchange="loadAvailability()" class="w-full px-4 py-2 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white">
+                        <option value="">Select a team...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block mb-2 font-semibold text-sm">Quick Presets</label>
+                    <select onchange="applyPreset(this.value)" class="w-full px-4 py-2 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white">
+                        <option value="">Choose preset...</option>
+                        <option value="9to5">9 AM - 5 PM (Weekdays)</option>
+                        <option value="10to6">10 AM - 6 PM (Weekdays)</option>
+                        <option value="flexible">Flexible Hours</option>
+                        <option value="clear">Clear All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Calendar -->
+        <div class="glass rounded-lg p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold">Weekly Schedule</h3>
+                <button onclick="saveAvailability()" class="px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50">
+                    Save Availability
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Days of the week -->
+                <div class="grid grid-cols-8 gap-2">
+                    <div class="text-sm font-semibold"></div>
+                    <div class="text-center text-sm font-semibold">Mon</div>
+                    <div class="text-center text-sm font-semibold">Tue</div>
+                    <div class="text-center text-sm font-semibold">Wed</div>
+                    <div class="text-center text-sm font-semibold">Thu</div>
+                    <div class="text-center text-sm font-semibold">Fri</div>
+                    <div class="text-center text-sm font-semibold">Sat</div>
+                    <div class="text-center text-sm font-semibold">Sun</div>
+                </div>
+
+                <!-- Time slots -->
+                <div id="timeSlots" class="space-y-2">
+                    <!-- Time slots will be generated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mt-6 glass rounded-lg p-6">
+            <h4 class="font-semibold mb-2">💡 How to use:</h4>
+            <ul class="text-purple-200 text-sm space-y-1">
+                <li>• Click on time slots to toggle availability</li>
+                <li>• Green = Available, Red = Unavailable</li>
+                <li>• Use presets to quickly set common schedules</li>
+                <li>• Don't forget to save your changes!</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 glass px-6 py-4 rounded-lg shadow-lg z-50">
+        <p id="toastMessage"></p>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let availability = {};
+        let currentTeamId = null;
+
+        const hours = [
+            '12 AM', '1 AM', '2 AM', '3 AM', '4 AM', '5 AM', 
+            '6 AM', '7 AM', '8 AM', '9 AM', '10 AM', '11 AM',
+            '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM',
+            '6 PM', '7 PM', '8 PM', '9 PM', '10 PM', '11 PM'
+        ];
+
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+        // Load user
+        async function loadUser() {
+            try {
+                const response = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('userName').textContent = data.user.name;
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+            }
+        }
+
+        // Load teams
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/teams', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('teamSelect');
+                    select.innerHTML = '<option value="">Select a team...</option>' +
+                        data.teams.map(team => `<option value="${team.id}">${team.name}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading teams:', error);
+            }
+        }
+
+        // Generate time slots
+        function generateTimeSlots() {
+            const container = document.getElementById('timeSlots');
+            container.innerHTML = hours.map((hour, hourIndex) => `
+                <div class="grid grid-cols-8 gap-2">
+                    <div class="text-sm text-purple-200 text-right pr-2">${hour}</div>
+                    ${days.map((day, dayIndex) => `
+                        <button 
+                            onclick="toggleSlot('${day}', ${hourIndex})"
+                            id="slot-${day}-${hourIndex}"
+                            class="time-slot unavailable p-2 rounded border-2 border-opacity-50 text-xs font-semibold">
+                            ${availability[day]?.[hourIndex] ? '✓' : '✗'}
+                        </button>
+                    `).join('')}
+                </div>
+            `).join('');
+            updateSlotDisplay();
+        }
+
+        // Toggle time slot
+        function toggleSlot(day, hour) {
+            if (!availability[day]) {
+                availability[day] = {};
+            }
+            availability[day][hour] = !availability[day][hour];
+            updateSlotDisplay();
+        }
+
+        // Update slot display
+        function updateSlotDisplay() {
+            days.forEach(day => {
+                hours.forEach((_, hourIndex) => {
+                    const slot = document.getElementById(`slot-${day}-${hourIndex}`);
+                    if (slot) {
+                        const isAvailable = availability[day]?.[hourIndex];
+                        slot.classList.toggle('available', isAvailable);
+                        slot.classList.toggle('unavailable', !isAvailable);
+                        slot.textContent = isAvailable ? '✓' : '✗';
+                    }
+                });
+            });
+        }
+
+        // Apply preset
+        function applyPreset(preset) {
+            availability = {};
+            
+            if (preset === 'clear') {
+                generateTimeSlots();
+                return;
+            }
+
+            const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+            
+            if (preset === '9to5') {
+                weekdays.forEach(day => {
+                    availability[day] = {};
+                    for (let hour = 9; hour <= 17; hour++) {
+                        availability[day][hour] = true;
+                    }
+                });
+            } else if (preset === '10to6') {
+                weekdays.forEach(day => {
+                    availability[day] = {};
+                    for (let hour = 10; hour <= 18; hour++) {
+                        availability[day][hour] = true;
+                    }
+                });
+            } else if (preset === 'flexible') {
+                days.forEach(day => {
+                    availability[day] = {};
+                    for (let hour = 8; hour <= 20; hour++) {
+                        availability[day][hour] = true;
+                    }
+                });
+            }
+            
+            updateSlotDisplay();
+        }
+
+        // Load availability
+        async function loadAvailability() {
+            const teamId = document.getElementById('teamSelect').value;
+            if (!teamId) return;
+            
+            currentTeamId = teamId;
+            
+            try {
+                const response = await fetch(`/api/teams/${teamId}/availability`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    availability = data.availability || {};
+                    updateSlotDisplay();
+                } else {
+                    availability = {};
+                    generateTimeSlots();
+                }
+            } catch (error) {
+                console.error('Error loading availability:', error);
+                availability = {};
+                generateTimeSlots();
+            }
+        }
+
+        // Save availability
+        async function saveAvailability() {
+            const teamId = document.getElementById('teamSelect').value;
+            if (!teamId) {
+                showToast('Please select a team first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}/availability`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ availability })
+                });
+
+                if (response.ok) {
+                    showToast('Availability saved!');
+                } else {
+                    showToast('Failed to save availability');
+                }
+            } catch (error) {
+                console.error('Error saving availability:', error);
+                showToast('Failed to save availability');
+            }
+        }
+
+        // Show toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        // Initialize
+        loadUser();
+        loadTeams();
+        generateTimeSlots();
+    </script>
+</body>
+</html>
