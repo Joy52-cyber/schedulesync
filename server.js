@@ -1,5 +1,6 @@
 ﻿// server.js
-require('dotenv').config();
+require('dotenv').config({ override: true });
+
 
 // Google Auth service (optional - gracefully handles if not configured)
 let googleAuth = null;
@@ -186,7 +187,18 @@ async function initDatabase() {
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-  
+  (async () => {
+  try {
+    const who = await pool.query(`
+      SELECT current_user, current_database(), inet_server_addr() AS host, inet_server_port() AS port
+    `);
+    console.log('DB identity:', who.rows[0]);
+    console.log('ENV DATABASE_URL (masked):', (process.env.DATABASE_URL || '').replace(/:(?!\/\/).+@/,'://***@'));
+  } catch (e) {
+    console.error('DB identity check failed:', e);
+  }
+})();
+
   // Add columns to bookings if table already exists
   try {
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
