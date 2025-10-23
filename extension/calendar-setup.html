@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendar Connections</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    body { min-width: 360px; padding: 12px; }
+    .events { max-height: 340px; overflow: auto; }
+    .small { font-size: 12px; color: #666; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h3>Connect your calendars</h3>
+  <div class="actions">
+    <button id="googleConnect">Connect Google</button>
+    <button id="googleLoad">Load Google Events</button>
+    <button id="msConnect">Connect Microsoft</button>
+    <button id="msLoad">Load MS Events</button>
+    <button id="logout" class="secondary">Disconnect All</button>
+  </div>
+
+  <h4>Events</h4>
+  <div id="events" class="events"></div>
+  <p class="small" id="status"></p>
+
+  <script src="calendar-setup.js" defer></script>
+</body>
+</html>

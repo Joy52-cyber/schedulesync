@@ -1,0 +1,218 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Diagnostic - ScheduleSync</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+        button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #4f46e5;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        input {
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 300px;
+            margin-right: 10px;
+        }
+        label {
+            font-weight: 600;
+            color: #374151;
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔍 ScheduleSync API Diagnostic</h1>
+        <p style="color: #6b7280;">Test your public booking API endpoint</p>
+    </div>
+
+    <div class="card">
+        <div class="test-section">
+            <h2 style="color: #1f2937; margin-bottom: 15px;">Test Public Team Endpoint</h2>
+            <label>Team ID or Public URL:</label>
+            <div>
+                <input type="text" id="teamIdInput" placeholder="Enter team ID (e.g., 87uzav)" value="87uzav">
+                <button onclick="testEndpoint()">Test Endpoint</button>
+            </div>
+            <div id="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3 style="color: #1f2937; margin-bottom: 15px;">Quick Tests:</h3>
+            <button onclick="testWithId('87uzav')">Test with: 87uzav</button>
+            <button onclick="testWithId('8')">Test with: 8</button>
+            <button onclick="testWithId('1')">Test with: 1</button>
+        </div>
+
+        <div class="test-section">
+            <h3 style="color: #1f2937; margin-bottom: 15px;">What This Tests:</h3>
+            <ul style="color: #6b7280; line-height: 1.8;">
+                <li><strong>Route Order:</strong> Is the public route being matched correctly?</li>
+                <li><strong>Response Format:</strong> Does the API return <code>{ team: {...} }</code>?</li>
+                <li><strong>Data Structure:</strong> Are id, name, and description present?</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="color: #1f2937; margin-bottom: 15px;">📋 Expected Response:</h3>
+        <div class="result success">
+{
+  "team": {
+    "id": 8,
+    "name": "Team Name",
+    "description": "Team Description"
+  }
+}</div>
+    </div>
+
+    <script>
+        async function testEndpoint() {
+            const teamId = document.getElementById('teamIdInput').value;
+            const resultDiv = document.getElementById('result');
+            
+            resultDiv.innerHTML = '<p style="color: #6b7280;">Testing...</p>';
+
+            try {
+                const url = `/api/teams/${teamId}/public`;
+                console.log('Testing URL:', url);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                let resultHTML = `
+                    <div class="result ${response.ok ? 'success' : 'error'}">
+                        <strong>Status:</strong> ${response.status} ${response.statusText}
+                        <br><br>
+                        <strong>URL:</strong> ${url}
+                        <br><br>
+                        <strong>Response:</strong>
+                        <br>
+                        ${JSON.stringify(data, null, 2)}
+                    </div>
+                `;
+
+                if (response.ok && data.team) {
+                    resultHTML += `
+                        <div class="result success" style="margin-top: 10px;">
+                            <strong>✅ SUCCESS!</strong>
+                            <br><br>
+                            Team ID: ${data.team.id}
+                            <br>
+                            Team Name: ${data.team.name}
+                            <br>
+                            Team Description: ${data.team.description || 'None'}
+                        </div>
+                    `;
+                } else if (response.ok && !data.team) {
+                    resultHTML += `
+                        <div class="result error" style="margin-top: 10px;">
+                            <strong>⚠️ ISSUE FOUND:</strong>
+                            <br><br>
+                            The API responded successfully but the response doesn't have a 'team' property.
+                            <br><br>
+                            <strong>Fix:</strong> The server.js public route needs to return: <code>res.json({ team: result.rows[0] })</code>
+                        </div>
+                    `;
+                } else {
+                    resultHTML += `
+                        <div class="result error" style="margin-top: 10px;">
+                            <strong>❌ ERROR:</strong>
+                            <br><br>
+                            ${data.error || 'Unknown error'}
+                            <br><br>
+                            <strong>Possible causes:</strong>
+                            <br>
+                            1. Route order issue - /api/teams/:id comes before /api/teams/:id/public
+                            <br>
+                            2. Team with this ID/URL doesn't exist
+                            <br>
+                            3. Server.js hasn't been deployed yet
+                        </div>
+                    `;
+                }
+
+                resultDiv.innerHTML = resultHTML;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <strong>❌ NETWORK ERROR:</strong>
+                        <br><br>
+                        ${error.message}
+                        <br><br>
+                        Could not connect to the API. Check your network connection.
+                    </div>
+                `;
+            }
+        }
+
+        function testWithId(id) {
+            document.getElementById('teamIdInput').value = id;
+            testEndpoint();
+        }
+
+        // Auto-test on load
+        window.onload = () => {
+            testEndpoint();
+        };
+    </script>
+</body>
+</html>
