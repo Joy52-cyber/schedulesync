@@ -186,9 +186,14 @@
                     <p id="confirmationDetails" class="text-purple-200 space-y-2"></p>
                 </div>
 
-                <a href="/" class="inline-block px-8 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50">
-                    Done
-                </a>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button onclick="window.location.reload()" class="px-8 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition">
+                        Book Another Meeting
+                    </button>
+                    <a href="https://schedulesync-production.up.railway.app" class="inline-block px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition border-2 border-white">
+                        Done
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -205,21 +210,27 @@
         let teamData = null;
         let currentMonth = new Date();
 
-        // Get team ID from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const teamId = urlParams.get('team') || window.location.pathname.split('/').pop();
+        // Get team ID from URL path (e.g., /book/6 -> 6)
+        const pathParts = window.location.pathname.split('/');
+        const teamId = pathParts[pathParts.length - 1];
+        
+        console.log('Team ID from URL:', teamId);
 
         // Load team info
         async function loadTeam() {
             try {
+                console.log('Fetching team:', `/api/teams/${teamId}/public`);
                 const response = await fetch(`/api/teams/${teamId}/public`);
                 if (response.ok) {
                     teamData = await response.json();
+                    console.log('Team loaded:', teamData);
                     document.getElementById('teamName').textContent = teamData.name;
                     document.getElementById('teamDescription').textContent = teamData.description || 'Select a date and time to book a meeting';
                 } else {
+                    console.error('Team not found:', response.status);
                     document.getElementById('teamName').textContent = 'Team Not Found';
                     document.getElementById('teamDescription').textContent = 'This booking link may be invalid';
+                    showToast('Team not found. Please check your booking link.');
                 }
             } catch (error) {
                 console.error('Error loading team:', error);
@@ -346,14 +357,25 @@
         async function submitBooking(event) {
             event.preventDefault();
 
+            // Validate team data is loaded
+            if (!teamData || !teamData.id) {
+                showToast('Team information not loaded. Please refresh the page.');
+                console.error('teamData not available:', teamData);
+                return;
+            }
+
+            console.log('Submitting booking for team:', teamData.id);
+
             const bookingData = {
-                team_id: teamData.id, // Use the numeric ID from teamData, not the URL parameter
+                team_id: teamData.id, // Use the numeric ID from teamData
                 date: selectedDate,
                 time: selectedTime,
                 guest_name: document.getElementById('guestName').value,
                 guest_email: document.getElementById('guestEmail').value,
                 guest_notes: document.getElementById('guestNotes').value
             };
+
+            console.log('Booking data:', bookingData);
 
             try {
                 const response = await fetch('/api/bookings', {
@@ -364,8 +386,11 @@
 
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('Booking created:', result);
                     showConfirmation(bookingData);
                 } else {
+                    const error = await response.json();
+                    console.error('Booking failed:', error);
                     showToast('Failed to create booking. Please try again.');
                 }
             } catch (error) {
