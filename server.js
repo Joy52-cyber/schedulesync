@@ -775,6 +775,40 @@ app.get('/api/migrate/fix-bookings', async (req, res) => {
   }
 });
 
+app.get('/api/migrate/fix-slot-constraints', async (req, res) => {
+  try {
+    const migrations = [];
+    
+    // Make slot_start nullable
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_start DROP NOT NULL`);
+    migrations.push('Made slot_start column nullable');
+    
+    // Make slot_end nullable
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_end DROP NOT NULL`);
+    migrations.push('Made slot_end column nullable');
+    
+    // Make slot_id nullable (if it has NOT NULL constraint)
+    try {
+      await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_id DROP NOT NULL`);
+      migrations.push('Made slot_id column nullable');
+    } catch (e) {
+      migrations.push('slot_id already nullable or does not exist');
+    }
+    
+    res.json({ 
+      success: true, 
+      migrations: migrations,
+      message: 'Slot constraints fixed! Bookings should work now.'
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hint: 'Check Railway logs for details'
+    });
+  }
+});
+
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
