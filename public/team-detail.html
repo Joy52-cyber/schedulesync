@@ -1,0 +1,648 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Details - ScheduleSync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: #64748b;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            color: #667eea;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            color: #334155;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #e2e8f0;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 24px;
+        }
+
+        .back-btn:hover {
+            text-decoration: underline;
+        }
+
+        .page-header {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .page-header h1 {
+            font-size: 32px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+
+        .team-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #64748b;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .btn-danger {
+            background: #fee;
+            color: #c33;
+        }
+
+        .btn-danger:hover {
+            background: #fdd;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .members-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .member-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .member-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .member-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .member-details h4 {
+            color: #1e293b;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .member-details p {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .role-badge {
+            padding: 4px 12px;
+            background: #ddd6fe;
+            color: #5b21b6;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 12px;
+        }
+
+        .public-link {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .link-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: monospace;
+            color: #334155;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #334155;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .team-stats {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .public-link {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">📅 ScheduleSync</a>
+        <div class="nav-links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/teams" class="active">Teams</a>
+            <a href="/availability">Availability</a>
+            <a href="/bookings">Bookings</a>
+        </div>
+        <div class="user-menu">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="/teams" class="back-btn">← Back to Teams</a>
+
+        <div id="teamContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading team...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div class="modal" id="addMemberModal">
+        <div class="modal-content">
+            <h2 class="modal-title">Add Team Member</h2>
+            <form id="addMemberForm" onsubmit="addMember(event)">
+                <div class="form-group">
+                    <label for="memberEmail">Email Address</label>
+                    <input type="email" id="memberEmail" required placeholder="colleague@example.com">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const teamId = window.location.pathname.split('/').pop();
+
+        if (!token) window.location.href = '/login';
+
+        if (user.name) {
+            document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+        }
+
+        let currentTeam = null;
+
+        async function loadTeam() {
+            try {
+                const response = await fetch(`/api/teams/${teamId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Team not found');
+
+                const data = await response.json();
+                currentTeam = data.team;
+                displayTeam(currentTeam);
+                loadMembers();
+            } catch (error) {
+                console.error('Error loading team:', error);
+                document.getElementById('teamContainer').innerHTML = `
+                    <div class="card">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <p>Team not found</p>
+                            <button class="btn btn-primary" onclick="window.location.href='/teams'">Back to Teams</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function displayTeam(team) {
+            const publicUrl = `${window.location.origin}/book/${team.public_url || team.id}`;
+            
+            document.getElementById('teamContainer').innerHTML = `
+                <div class="page-header">
+                    <h1>${escapeHtml(team.name)}</h1>
+                    <p>${escapeHtml(team.description || 'No description')}</p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span>👥</span>
+                            <span id="memberCount">0 members</span>
+                        </div>
+                        <div class="stat">
+                            <span>📅</span>
+                            <span>0 bookings</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Public Booking Link</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="copyLink()">📋 Copy Link</button>
+                    </div>
+                    <div class="public-link">
+                        <input type="text" class="link-input" id="publicLink" value="${publicUrl}" readonly>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Team Members</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openAddMemberModal()">➕ Add Member</button>
+                    </div>
+                    <div id="membersList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadMembers() {
+            try {
+                const response = await fetch(`/api/teams/${teamId}/members`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load members');
+
+                const data = await response.json();
+                displayMembers(data.members || []);
+            } catch (error) {
+                console.error('Error loading members:', error);
+                document.getElementById('membersList').innerHTML = `
+                    <div class="empty-state">
+                        <p>Failed to load members</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayMembers(members) {
+            const container = document.getElementById('membersList');
+            document.getElementById('memberCount').textContent = `${members.length} member${members.length !== 1 ? 's' : ''}`;
+
+            if (members.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👥</div>
+                        <p>No members yet</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="members-list">
+                    ${members.map(member => `
+                        <div class="member-item">
+                            <div class="member-info">
+                                <div class="member-avatar">${(member.name || member.email).charAt(0).toUpperCase()}</div>
+                                <div class="member-details">
+                                    <h4>${escapeHtml(member.name || 'Unknown')}</h4>
+                                    <p>${escapeHtml(member.email)}</p>
+                                </div>
+                                ${member.role === 'owner' ? '<span class="role-badge">OWNER</span>' : ''}
+                            </div>
+                            ${member.role !== 'owner' ? `
+                                <button class="btn btn-danger btn-sm" onclick="removeMember(${member.id})">Remove</button>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function openAddMemberModal() {
+            document.getElementById('addMemberModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('addMemberModal').classList.remove('active');
+            document.getElementById('addMemberForm').reset();
+        }
+
+        async function addMember(event) {
+            event.preventDefault();
+            const email = document.getElementById('memberEmail').value;
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}/members`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to add member');
+                }
+
+                closeModal();
+                loadMembers();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function removeMember(memberId) {
+            if (!confirm('Remove this member from the team?')) return;
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}/members/${memberId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to remove member');
+
+                loadMembers();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function copyLink() {
+            const input = document.getElementById('publicLink');
+            input.select();
+            document.execCommand('copy');
+            alert('Link copied to clipboard!');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        loadTeam();
+
+        document.getElementById('addMemberModal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) closeModal();
+        });
+    </script>
+</body>
+</html>
