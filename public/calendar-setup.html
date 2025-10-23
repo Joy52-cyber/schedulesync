@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Calendar - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .calendar-card {
+            transition: all 0.3s ease;
+        }
+        .calendar-card:hover {
+            transform: translateX(4px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .calendar-card.selected {
+            background: white;
+            color: #764ba2;
+            border-color: white;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="glass rounded-2xl p-8 w-full max-w-2xl">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="text-6xl mb-4">📅</div>
+                <h1 class="text-3xl font-bold mb-2">Select Your Calendar</h1>
+                <p class="text-purple-200">Choose which calendar to use for bookings</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-8">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                <p class="mt-4 text-purple-200">Loading your calendars...</p>
+            </div>
+
+            <!-- Calendar List -->
+            <div id="calendarList" class="hidden space-y-3">
+                <!-- Calendars will be populated here -->
+            </div>
+
+            <!-- Continue Button -->
+            <div id="continueSection" class="hidden mt-8">
+                <button 
+                    id="continueBtn" 
+                    disabled
+                    class="w-full bg-white text-purple-600 font-semibold py-3 px-4 rounded-lg hover:bg-purple-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Continue to Dashboard
+                </button>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mt-4 p-4 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg">
+                <p class="text-sm"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedCalendarId = null;
+
+        // Load calendars on page load
+        document.addEventListener('DOMContentLoaded', loadCalendars);
+
+        async function loadCalendars() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const response = await fetch('/api/calendars', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load calendars');
+                }
+
+                const calendars = await response.json();
+                displayCalendars(calendars);
+
+            } catch (error) {
+                console.error('Error loading calendars:', error);
+                showError('Failed to load calendars. Please try again.');
+            }
+        }
+
+        function displayCalendars(calendars) {
+            const loading = document.getElementById('loading');
+            const calendarList = document.getElementById('calendarList');
+            const continueSection = document.getElementById('continueSection');
+
+            loading.classList.add('hidden');
+            calendarList.classList.remove('hidden');
+            continueSection.classList.remove('hidden');
+
+            if (calendars.length === 0) {
+                calendarList.innerHTML = '<p class="text-center text-purple-200">No calendars found</p>';
+                return;
+            }
+
+            calendarList.innerHTML = calendars.map(cal => `
+                <div 
+                    class="calendar-card glass rounded-lg p-4 cursor-pointer border-2 border-white border-opacity-20"
+                    data-calendar-id="${cal.id}"
+                    onclick="selectCalendar('${cal.id}')"
+                >
+                    <div class="flex items-center gap-4">
+                        <div 
+                            class="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                            style="background-color: ${cal.backgroundColor || '#667eea'};"
+                        >
+                            📅
+                        </div>
+                        <div class="flex-1">
+                            <div class="font-semibold text-lg">
+                                ${cal.name}
+                                ${cal.primary ? '<span class="ml-2 text-xs bg-white bg-opacity-20 px-2 py-1 rounded">Primary</span>' : ''}
+                            </div>
+                            <div class="text-sm opacity-80">
+                                ${cal.timezone}
+                            </div>
+                        </div>
+                        <div class="check-icon hidden">
+                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Auto-select primary calendar
+            const primaryCal = calendars.find(cal => cal.primary);
+            if (primaryCal) {
+                selectCalendar(primaryCal.id);
+            }
+        }
+
+        function selectCalendar(calendarId) {
+            // Remove selection from all cards
+            document.querySelectorAll('.calendar-card').forEach(card => {
+                card.classList.remove('selected');
+                card.querySelector('.check-icon').classList.add('hidden');
+            });
+
+            // Select clicked card
+            const card = document.querySelector(`[data-calendar-id="${calendarId}"]`);
+            card.classList.add('selected');
+            card.querySelector('.check-icon').classList.remove('hidden');
+
+            selectedCalendarId = calendarId;
+            document.getElementById('continueBtn').disabled = false;
+        }
+
+        async function saveCalendar() {
+            if (!selectedCalendarId) return;
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/user/calendar', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ calendar_id: selectedCalendarId })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save calendar');
+                }
+
+                // Redirect to dashboard
+                window.location.href = '/dashboard';
+
+            } catch (error) {
+                console.error('Error saving calendar:', error);
+                showError('Failed to save calendar. Please try again.');
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.querySelector('p').textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        // Continue button click handler
+        document.getElementById('continueBtn').addEventListener('click', saveCalendar);
+    </script>
+</body>
+</html>
