@@ -1059,6 +1059,23 @@ app.get('/api/debug/status', (req, res) => {
   });
 });
 
+app.get('/api/debug/oauth', (req, res) => {
+  res.json({
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'MISSING',
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'MISSING',
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'MISSING',
+    GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || 'MISSING',
+    redirectUriUsed: process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL || 'NONE',
+    authUrlTest: (() => {
+      try {
+        return googleAuth.getAuthUrl();
+      } catch (e) {
+        return 'ERROR: ' + e.message;
+      }
+    })()
+  });
+});
+
 /* --------------------------- Database Migrations -------------------------- */
 app.get('/api/migrate/fix-bookings', async (req, res) => {
   try {
