@@ -812,12 +812,12 @@
             }
 
             const bookingData = {
-                teamId: teamData.id,
-                guestName: document.getElementById('guestName').value,
-                guestEmail: document.getElementById('guestEmail').value,
-                guestNotes: document.getElementById('guestNotes').value,
-                bookingDate: selectedDate,
-                bookingTime: selectedTime
+                team_id: teamData.id,
+                guest_name: document.getElementById('guestName').value,
+                guest_email: document.getElementById('guestEmail').value,
+                guest_notes: document.getElementById('guestNotes').value,
+                date: selectedDate,
+                time: selectedTime
             };
 
             console.log('📤 Booking data being sent:', bookingData);
