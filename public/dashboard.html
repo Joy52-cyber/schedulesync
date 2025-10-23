@@ -4,513 +4,504 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - ScheduleSync</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
             min-height: 100vh;
         }
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+
+        /* Navbar */
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .card-hover {
-            transition: all 0.3s ease;
+
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
         }
-        .card-hover:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
         }
+
+        .nav-links a {
+            color: #64748b;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .nav-links a.active {
+            color: #667eea;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            color: #334155;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #e2e8f0;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .page-header {
+            margin-bottom: 40px;
+        }
+
+        .page-header h1 {
+            font-size: 32px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            font-size: 16px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
         .stat-card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .pulse-dot {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .stat-icon.purple {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .stat-icon.blue {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-icon.green {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        .stat-icon.orange {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .action-btn {
+            padding: 16px 24px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            color: #334155;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+        }
+
+        .action-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Recent Activity */
+        .section {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .view-all {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .view-all:hover {
+            text-decoration: underline;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+
+        /* Mobile Menu */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 24px 16px;
+            }
+
+            .page-header h1 {
+                font-size: 24px;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
-<body class="text-white">
-    <!-- Navigation -->
-    <nav class="glass p-4 mb-6">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-6">
-                <h1 class="text-2xl font-bold">⚡ ScheduleSync</h1>
-                <div class="hidden md:flex space-x-4">
-                    <a href="/dashboard" class="text-white font-semibold">Dashboard</a>
-                    <a href="/teams" class="hover:text-purple-200">Teams</a>
-                    <a href="/availability" class="hover:text-purple-200">Availability</a>
-                    <a href="/bookings" class="hover:text-purple-200">Bookings</a>
-                </div>
-            </div>
-            <div class="flex items-center space-x-4">
-                <span id="userName" class="hidden md:inline">User</span>
-                <button onclick="logout()" class="px-4 py-2 bg-red-500 rounded-lg hover:bg-red-600 transition">Sign Out</button>
-            </div>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="/" class="nav-brand">📅 ScheduleSync</a>
+        <div class="nav-links">
+            <a href="/dashboard" class="active">Dashboard</a>
+            <a href="/teams">Teams</a>
+            <a href="/availability">Availability</a>
+            <a href="/bookings">Bookings</a>
+        </div>
+        <div class="user-menu">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
         </div>
     </nav>
 
-    <div class="container mx-auto px-4 pb-8">
-        <!-- Welcome Section -->
-        <div class="mb-8">
-            <h2 class="text-4xl font-bold mb-2">Welcome back, <span id="userNameDisplay">User</span>! 👋</h2>
-            <p class="text-purple-200">Here's what's happening with your schedule today</p>
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>Welcome back, <span id="userName">User</span>! 👋</h1>
+            <p>Here's what's happening with your schedule today</p>
         </div>
 
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total Bookings -->
-            <div class="stat-card rounded-lg p-6 card-hover">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-purple-200 text-sm font-semibold">Total Bookings</span>
-                    <div class="w-10 h-10 bg-blue-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
-                        📅
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value" id="totalTeams">0</div>
+                        <div class="stat-label">Your Teams</div>
                     </div>
-                </div>
-                <div class="text-3xl font-bold mb-1" id="totalBookings">0</div>
-                <div class="text-xs text-purple-200">All time</div>
-            </div>
-
-            <!-- Upcoming Meetings -->
-            <div class="stat-card rounded-lg p-6 card-hover">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-purple-200 text-sm font-semibold">Upcoming</span>
-                    <div class="w-10 h-10 bg-green-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
-                        🎯
-                    </div>
-                </div>
-                <div class="text-3xl font-bold mb-1" id="upcomingMeetings">0</div>
-                <div class="text-xs text-purple-200 flex items-center">
-                    <span class="pulse-dot inline-block w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                    Next 7 days
+                    <div class="stat-icon purple">👥</div>
                 </div>
             </div>
 
-            <!-- Completed -->
-            <div class="stat-card rounded-lg p-6 card-hover">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-purple-200 text-sm font-semibold">Completed</span>
-                    <div class="w-10 h-10 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
-                        ✅
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value" id="totalBookings">0</div>
+                        <div class="stat-label">Total Bookings</div>
                     </div>
+                    <div class="stat-icon blue">📅</div>
                 </div>
-                <div class="text-3xl font-bold mb-1" id="completedMeetings">0</div>
-                <div class="text-xs text-purple-200">This month</div>
             </div>
 
-            <!-- Team Members -->
-            <div class="stat-card rounded-lg p-6 card-hover">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-purple-200 text-sm font-semibold">Team Members</span>
-                    <div class="w-10 h-10 bg-orange-500 bg-opacity-30 rounded-lg flex items-center justify-center text-2xl">
-                        👥
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value" id="upcomingMeetings">0</div>
+                        <div class="stat-label">Upcoming Meetings</div>
                     </div>
+                    <div class="stat-icon green">🎯</div>
                 </div>
-                <div class="text-3xl font-bold mb-1" id="teamMembers">0</div>
-                <div class="text-xs text-purple-200">Active</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div>
+                        <div class="stat-value" id="teamMembers">0</div>
+                        <div class="stat-label">Team Members</div>
+                    </div>
+                    <div class="stat-icon orange">⭐</div>
+                </div>
             </div>
         </div>
 
         <!-- Quick Actions -->
-        <div class="glass rounded-lg p-6 mb-8">
-            <h3 class="text-2xl font-bold mb-6">Quick Actions</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <a href="/teams" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
-                    <div class="text-4xl mb-3">👥</div>
-                    <h4 class="font-bold text-lg mb-2">Create Team</h4>
-                    <p class="text-sm text-purple-200">Set up a new scheduling team</p>
-                </a>
-                
-                <a href="/availability" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
-                    <div class="text-4xl mb-3">📅</div>
-                    <h4 class="font-bold text-lg mb-2">Set Availability</h4>
-                    <p class="text-sm text-purple-200">Update your available time slots</p>
-                </a>
-                
-                <a href="/bookings" class="block p-6 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition card-hover">
-                    <div class="text-4xl mb-3">📋</div>
-                    <h4 class="font-bold text-lg mb-2">View Bookings</h4>
-                    <p class="text-sm text-purple-200">Manage all your bookings</p>
-                </a>
-            </div>
+        <div class="quick-actions">
+            <a href="/teams" class="action-btn primary">
+                ➕ Create Team
+            </a>
+            <a href="/availability" class="action-btn">
+                🕐 Set Availability
+            </a>
+            <a href="/bookings" class="action-btn">
+                📋 View Bookings
+            </a>
+            <a href="/calendar-setup" class="action-btn">
+                🔗 Connect Calendar
+            </a>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Recent Activity -->
-            <div class="lg:col-span-2 glass rounded-lg p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-2xl font-bold">Recent Activity</h3>
-                    <button onclick="loadActivity()" class="text-sm text-purple-200 hover:text-white transition">
-                        Refresh
-                    </button>
-                </div>
-                <div id="activityList" class="space-y-3">
-                    <!-- Activity items will be loaded here -->
-                </div>
-                <div id="emptyActivity" class="hidden text-center py-12">
-                    <div class="text-6xl mb-4">📭</div>
-                    <p class="text-purple-200">No recent activity</p>
-                    <p class="text-sm text-purple-300 mt-2">Create a team or set your availability to get started!</p>
-                </div>
+        <!-- Recent Activity -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Recent Activity</h2>
+                <a href="/bookings" class="view-all">View all →</a>
             </div>
-
-            <!-- Calendar Integration & Quick Links -->
-            <div class="space-y-6">
-                <!-- Calendar Status -->
-                <div class="glass rounded-lg p-6">
-                    <h3 class="text-xl font-bold mb-4">📅 Calendar Integration</h3>
-                    <div id="calendarStatus" class="space-y-3">
-                        <!-- Calendar connections will be loaded here -->
-                    </div>
-                    <div id="noCalendars" class="text-center py-6">
-                        <div class="text-4xl mb-3">🔗</div>
-                        <p class="text-sm text-purple-200 mb-4">No calendars connected</p>
-                        <a href="/dashboard#integrations" class="inline-block px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50 transition">
-                            Connect Calendar
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Email Integration Status -->
-                <div class="glass rounded-lg p-6">
-                    <h3 class="text-xl font-bold mb-4">📧 Email Integration</h3>
-                    <div id="emailStatus" class="space-y-4">
-                        <!-- Email status will be loaded here -->
-                        <div class="flex items-center justify-between p-3 bg-white bg-opacity-10 rounded-lg">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                                    <span class="text-xl">✉️</span>
-                                </div>
-                                <div>
-                                    <div class="font-semibold">Email Notifications</div>
-                                    <div class="text-sm text-purple-200" id="emailProvider">Loading...</div>
-                                </div>
-                            </div>
-                            <div id="emailStatusBadge">
-                                <span class="px-3 py-1 bg-yellow-500 bg-opacity-20 text-yellow-200 rounded-full text-xs font-semibold">
-                                    Checking...
-                                </span>
-                            </div>
-                        </div>
-                        
-                        <div class="text-sm text-purple-200">
-                            <div class="flex items-center space-x-2 mb-2">
-                                <span id="bookingEmailsIcon">⏳</span>
-                                <span id="bookingEmailsText">Booking confirmations</span>
-                            </div>
-                            <div class="flex items-center space-x-2 mb-2">
-                                <span id="teamEmailsIcon">⏳</span>
-                                <span id="teamEmailsText">Team invitations</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <span id="reminderEmailsIcon">⏳</span>
-                                <span id="reminderEmailsText">Meeting reminders</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Your Teams -->
-                <div class="glass rounded-lg p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-bold">Your Teams</h3>
-                        <a href="/teams" class="text-sm text-purple-200 hover:text-white transition">View All</a>
-                    </div>
-                    <div id="teamsList" class="space-y-2">
-                        <!-- Teams will be loaded here -->
-                    </div>
-                    <div id="noTeams" class="text-center py-6">
-                        <div class="text-4xl mb-3">📋</div>
-                        <p class="text-sm text-purple-200 mb-4">No teams yet</p>
-                        <a href="/teams" class="inline-block px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50 transition">
-                            Create Team
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Quick Stats -->
-                <div class="glass rounded-lg p-6">
-                    <h3 class="text-xl font-bold mb-4">This Week</h3>
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="text-purple-200 text-sm">Monday</span>
-                            <span class="font-semibold">3 slots</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-purple-200 text-sm">Tuesday</span>
-                            <span class="font-semibold">5 slots</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-purple-200 text-sm">Wednesday</span>
-                            <span class="font-semibold">4 slots</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-purple-200 text-sm">Thursday</span>
-                            <span class="font-semibold">6 slots</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-purple-200 text-sm">Friday</span>
-                            <span class="font-semibold">4 slots</span>
-                        </div>
-                    </div>
+            <div id="recentActivity">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading activity...</p>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="hidden fixed bottom-4 right-4 glass px-6 py-4 rounded-lg shadow-lg z-50">
-        <p id="toastMessage"></p>
     </div>
 
     <script>
+        // Check authentication
         const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
         if (!token) {
             window.location.href = '/login';
         }
 
-        // Load user info
-        async function loadUser() {
-            try {
-                const response = await fetch('/api/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('userName').textContent = data.user.name;
-                    document.getElementById('userNameDisplay').textContent = data.user.name;
-                } else {
-                    document.getElementById('userName').textContent = 'User';
-                    document.getElementById('userNameDisplay').textContent = 'User';
-                }
-            } catch (error) {
-                console.error('Error loading user:', error);
-            }
+        // Display user info
+        if (user.name) {
+            document.getElementById('userName').textContent = user.name.split(' ')[0];
+            document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
         }
 
-        // Load analytics
-        async function loadAnalytics() {
+        // Load dashboard data
+        async function loadDashboard() {
             try {
-                const response = await fetch('/api/analytics/dashboard', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                // Load analytics
+                const analyticsResponse = await fetch('/api/analytics/dashboard', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('totalBookings').textContent = data.totalBookings || 0;
-                    document.getElementById('upcomingMeetings').textContent = data.upcomingMeetings || 0;
-                    document.getElementById('completedMeetings').textContent = data.completedMeetings || 0;
-                    document.getElementById('teamMembers').textContent = data.teamMembers || 0;
-                    
-                    if (data.recentActivity && data.recentActivity.length > 0) {
-                        displayActivity(data.recentActivity);
-                    } else {
-                        document.getElementById('activityList').classList.add('hidden');
-                        document.getElementById('emptyActivity').classList.remove('hidden');
-                    }
+                if (analyticsResponse.ok) {
+                    const analytics = await analyticsResponse.json();
+                    document.getElementById('totalBookings').textContent = analytics.totalBookings || 0;
+                    document.getElementById('upcomingMeetings').textContent = analytics.upcomingMeetings || 0;
+                    document.getElementById('teamMembers').textContent = analytics.teamMembers || 0;
                 }
-            } catch (error) {
-                console.error('Error loading analytics:', error);
-            }
-        }
 
-        // Display activity
-        function displayActivity(activities) {
-            const list = document.getElementById('activityList');
-            list.classList.remove('hidden');
-            document.getElementById('emptyActivity').classList.add('hidden');
-            
-            list.innerHTML = activities.slice(0, 8).map(activity => `
-                <div class="flex items-start space-x-3 p-3 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition">
-                    <div class="w-10 h-10 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-xl flex-shrink-0">
-                        ${activity.status === 'confirmed' ? '✅' : '⏳'}
+                // Load teams count
+                const teamsResponse = await fetch('/api/teams', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (teamsResponse.ok) {
+                    const teamsData = await teamsResponse.json();
+                    document.getElementById('totalTeams').textContent = teamsData.teams?.length || 0;
+                }
+
+                // Show empty state for activity
+                document.getElementById('recentActivity').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No recent activity yet</p>
+                        <a href="/teams" class="action-btn primary">Get Started</a>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-sm truncate">${activity.title || 'Meeting'}</p>
-                        <p class="text-xs text-purple-200">${activity.attendee_name || 'Guest'}</p>
-                        <p class="text-xs text-purple-300">${new Date(activity.start_time).toLocaleDateString()}</p>
+                `;
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                document.getElementById('recentActivity').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <p>Failed to load activity</p>
                     </div>
-                    <span class="px-2 py-1 bg-purple-500 bg-opacity-30 rounded text-xs">${activity.status}</span>
-                </div>
-            `).join('');
-        }
-
-        // Load teams
-        async function loadTeams() {
-            try {
-                const response = await fetch('/api/teams', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const teams = data.teams || [];
-                    
-                    if (teams.length > 0) {
-                        document.getElementById('noTeams').classList.add('hidden');
-                        document.getElementById('teamsList').innerHTML = teams.slice(0, 5).map(team => `
-                            <a href="/teams" class="block p-3 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-8 h-8 bg-purple-500 bg-opacity-30 rounded-lg flex items-center justify-center text-sm">
-                                            👥
-                                        </div>
-                                        <div>
-                                            <div class="font-semibold text-sm">${team.name}</div>
-                                            <div class="text-xs text-purple-200">${team.member_count || 0} members</div>
-                                        </div>
-                                    </div>
-                                    <span class="text-xs text-purple-200">→</span>
-                                </div>
-                            </a>
-                        `).join('');
-                    } else {
-                        document.getElementById('noTeams').classList.remove('hidden');
-                        document.getElementById('teamsList').innerHTML = '';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading teams:', error);
-            }
-        }
-
-        // Load calendar connections
-        async function loadCalendars() {
-            try {
-                const response = await fetch('/api/calendar/connections', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const connections = data.connections || [];
-                    
-                    if (connections.length > 0) {
-                        document.getElementById('noCalendars').classList.add('hidden');
-                        document.getElementById('calendarStatus').innerHTML = connections.map(conn => `
-                            <div class="flex items-center justify-between p-3 bg-white bg-opacity-5 rounded-lg">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 bg-green-500 bg-opacity-30 rounded-lg flex items-center justify-center text-sm">
-                                        ${conn.provider === 'google' ? '📧' : '📮'}
-                                    </div>
-                                    <div>
-                                        <div class="font-semibold text-sm">${conn.provider === 'google' ? 'Google' : 'Microsoft'}</div>
-                                        <div class="text-xs text-purple-200">${conn.email || 'Connected'}</div>
-                                    </div>
-                                </div>
-                                <span class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></span>
-                            </div>
-                        `).join('');
-                    } else {
-                        document.getElementById('noCalendars').classList.remove('hidden');
-                        document.getElementById('calendarStatus').innerHTML = '';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading calendars:', error);
-            }
-        }
-
-        // Load email integration status
-        async function loadEmailStatus() {
-            try {
-                const response = await fetch('/api/debug/email');
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const isConfigured = data.emailServiceLoaded && data.resendApiKey !== 'Not set';
-                    
-                    // Update provider text
-                    document.getElementById('emailProvider').textContent = 
-                        isConfigured ? `via ${data.fromEmail || 'Resend'}` : 'Not configured';
-                    
-                    // Update status badge
-                    const badge = document.getElementById('emailStatusBadge');
-                    if (isConfigured) {
-                        badge.innerHTML = `
-                            <span class="px-3 py-1 bg-green-500 bg-opacity-20 text-green-200 rounded-full text-xs font-semibold flex items-center space-x-1">
-                                <span class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></span>
-                                <span>Active</span>
-                            </span>
-                        `;
-                        
-                        // Update feature icons
-                        document.getElementById('bookingEmailsIcon').textContent = '✅';
-                        document.getElementById('teamEmailsIcon').textContent = '✅';
-                        document.getElementById('reminderEmailsIcon').textContent = '✅';
-                        
-                        document.getElementById('bookingEmailsText').innerHTML = '<strong>Booking confirmations</strong> - Active';
-                        document.getElementById('teamEmailsText').innerHTML = '<strong>Team invitations</strong> - Active';
-                        document.getElementById('reminderEmailsText').innerHTML = '<strong>Meeting reminders</strong> - Active';
-                    } else {
-                        badge.innerHTML = `
-                            <span class="px-3 py-1 bg-red-500 bg-opacity-20 text-red-200 rounded-full text-xs font-semibold">
-                                Inactive
-                            </span>
-                        `;
-                        
-                        // Update feature icons
-                        document.getElementById('bookingEmailsIcon').textContent = '❌';
-                        document.getElementById('teamEmailsIcon').textContent = '❌';
-                        document.getElementById('reminderEmailsIcon').textContent = '❌';
-                        
-                        document.getElementById('bookingEmailsText').innerHTML = 'Booking confirmations - <span class="text-red-200">Disabled</span>';
-                        document.getElementById('teamEmailsText').innerHTML = 'Team invitations - <span class="text-red-200">Disabled</span>';
-                        document.getElementById('reminderEmailsText').innerHTML = 'Meeting reminders - <span class="text-red-200">Disabled</span>';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading email status:', error);
-                document.getElementById('emailProvider').textContent = 'Error loading status';
-                document.getElementById('emailStatusBadge').innerHTML = `
-                    <span class="px-3 py-1 bg-gray-500 bg-opacity-20 text-gray-200 rounded-full text-xs font-semibold">
-                        Error
-                    </span>
                 `;
             }
         }
 
-        // Load activity (refresh)
-        async function loadActivity() {
-            await loadAnalytics();
-            showToast('Activity refreshed!');
-        }
-
-        // Show toast
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMessage').textContent = message;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
-        }
-
-        // Logout
         function logout() {
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             window.location.href = '/login';
         }
 
-        // Initialize
-        loadUser();
-        loadAnalytics();
-        loadTeams();
-        loadCalendars();
-        loadEmailStatus();
+        function toggleMobileMenu() {
+            const navLinks = document.querySelector('.nav-links');
+            navLinks.style.display = navLinks.style.display === 'flex' ? 'none' : 'flex';
+        }
 
-        // Refresh data every 30 seconds
-        setInterval(() => {
-            loadAnalytics();
-            loadTeams();
-            loadCalendars();
-            loadEmailStatus();
-        }, 30000);
+        // Load data on page load
+        loadDashboard();
     </script>
 </body>
 </html>
