@@ -1131,6 +1131,7 @@ app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'publi
 app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
 app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
 app.get('/calendar-setup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'calendar-setup.html')));
+app.get('/teams/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-detail.html')));
 
 /* ----------------------------- Debug Endpoints ---------------------------- */
 app.get('/api/debug/email', (req, res) => {
