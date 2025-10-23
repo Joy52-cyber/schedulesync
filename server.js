@@ -510,22 +510,36 @@ app.get('/api/teams/:id/public', async (req, res) => {
 // Create booking (public - no auth required)
 app.post('/api/bookings', async (req, res) => {
   try {
-    const { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
+    let { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
     
-    console.log('Creating booking:', { team_id, date, time, guest_name, guest_email });
+    console.log('Creating booking with team_id:', team_id);
     
-    // Get team info
-    const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [team_id]);
+    // If team_id is not numeric, try to look it up as public_url
+    const isNumeric = /^\d+$/.test(String(team_id));
+    let teamResult;
+    
+    if (isNumeric) {
+      // It's a numeric ID
+      teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [parseInt(team_id)]);
+    } else {
+      // It's a public_url string - look it up
+      teamResult = await pool.query('SELECT * FROM teams WHERE public_url = $1', [team_id]);
+    }
+    
     if (teamResult.rows.length === 0) {
       return res.status(404).json({ error: 'Team not found' });
     }
-    const team = teamResult.rows[0];
     
-    // Create booking without slot_id (make it nullable or use a default)
+    const team = teamResult.rows[0];
+    const numericTeamId = team.id; // Use the numeric ID from the database
+    
+    console.log('Found team:', { id: team.id, name: team.name });
+    
+    // Create booking with the numeric team ID
     const result = await pool.query(
       `INSERT INTO bookings (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time)
        VALUES ($1, NULL, $2, $3, $4, 'confirmed', $5, $6) RETURNING *`,
-      [team_id, guest_name, guest_email, guest_notes || '', date, time]
+      [numericTeamId, guest_name, guest_email, guest_notes || '', date, time]
     );
     
     const booking = result.rows[0];
