@@ -1,6 +1,6 @@
 ﻿// server.js
 require('dotenv').config();
-
+const googleAuth = require('./google-auth-service');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -30,10 +30,10 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// Google
+// Google - Support both variable names
 const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_CLIENT_SECRET = clean(process.env.GOOGLE_CLIENT_SECRET);
-const GOOGLE_CALLBACK_URL  = clean(process.env.GOOGLE_CALLBACK_URL);
+const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL);
 
 // Microsoft
 const MICROSOFT_CLIENT_ID     = clean(process.env.MICROSOFT_CLIENT_ID);
@@ -52,7 +52,7 @@ console.log(`📡 Will listen on port ${PORT}`);
 console.log('\n📋 Environment Variables Check:');
 console.log(`  GOOGLE_CLIENT_ID:        ${GOOGLE_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
 console.log(`  GOOGLE_CLIENT_SECRET:    ${GOOGLE_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
-console.log(`  GOOGLE_CALLBACK_URL:     ${GOOGLE_CALLBACK_URL ? '✅ Found' : '❌ Missing'}`);
+console.log(`  GOOGLE_REDIRECT_URI:     ${GOOGLE_REDIRECT_URI ? '✅ Found' : '❌ Missing'}`);
 console.log(`  MICROSOFT_CLIENT_ID:     ${MICROSOFT_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
 console.log(`  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
 console.log(`  MICROSOFT_CALLBACK_URL:  ${MICROSOFT_CALLBACK_URL ? '✅ Found' : '❌ Missing'}`);
@@ -75,12 +75,21 @@ let dbReady = false;
 })();
 
 async function initDatabase() {
+  // Users table with Google OAuth columns
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
       email VARCHAR(255) UNIQUE NOT NULL,
-      password VARCHAR(255) NOT NULL,
+      password VARCHAR(255),
+      google_id VARCHAR(255) UNIQUE,
+      google_access_token TEXT,
+      google_refresh_token TEXT,
+      default_calendar_id VARCHAR(255),
+      profile_picture TEXT,
+      timezone VARCHAR(100) DEFAULT 'UTC',
+      working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb,
+      booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
   await pool.query(`
@@ -121,6 +130,8 @@ async function initDatabase() {
       guest_notes TEXT,
       booking_date DATE,
       booking_time VARCHAR(50),
+      calendar_event_id VARCHAR(255),
+      meet_link TEXT,
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -139,6 +150,9 @@ async function initDatabase() {
       created_at TIMESTAMP DEFAULT NOW(),
       UNIQUE(user_id, provider)
     )`);
+  
+  // Create index on google_id
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
 }
 
 async function ensureTestUser() {
@@ -159,6 +173,7 @@ function authenticateToken(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     req.userId = decoded.userId;
     next();
   } catch {
@@ -167,12 +182,9 @@ function authenticateToken(req, res, next) {
 }
 
 /* --------------------------- Time Parsing Helper --------------------------- */
-// Returns { start: 'YYYY-MM-DD HH:MM:SS', end: 'YYYY-MM-DD HH:MM:SS' } for a 60-minute slot,
-// or null if date/time are invalid. Uses UTC math and formats without timezone for Postgres TIMESTAMP.
 function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
 
-  // Expect "4:30 PM", "09:00 AM", etc.
   const parts = String(timeStr).trim().split(/\s+/);
   if (parts.length < 2) return null;
 
@@ -190,7 +202,6 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   const hh = String(h).padStart(2, '0');
   const mm = String(m).padStart(2, '0');
 
-  // Build a UTC date for safe +60m increment
   const d = new Date(`${dateStr}T${hh}:${mm}:00Z`);
   if (isNaN(d.getTime())) return null;
 
@@ -205,7 +216,7 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   };
 
   const start = d;
-  const end   = new Date(d.getTime() + 60 * 60000); // +60 minutes
+  const end   = new Date(d.getTime() + 60 * 60000);
 
   return { start: toTS(start), end: toTS(end) };
 }
@@ -215,7 +226,7 @@ function assertGoogleConfigured(res) {
   const missing = [];
   if (!GOOGLE_CLIENT_ID)     missing.push('GOOGLE_CLIENT_ID');
   if (!GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET');
-  if (!GOOGLE_CALLBACK_URL)  missing.push('GOOGLE_CALLBACK_URL');
+  if (!GOOGLE_REDIRECT_URI)  missing.push('GOOGLE_REDIRECT_URI');
   if (missing.length) {
     res.status(400).json({ ok: false, provider: 'google', message: 'Google Calendar not configured', missing });
     return true;
@@ -245,7 +256,7 @@ app.get('/', (_req, res) => {
   res.json({
     status: 'ScheduleSync API Running',
     config: {
-      google:    !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_CALLBACK_URL),
+      google:    !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI),
       microsoft: !!(MICROSOFT_CLIENT_ID && MICROSOFT_CLIENT_SECRET && MICROSOFT_CALLBACK_URL),
       database:  dbReady
     }
@@ -283,9 +294,230 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/users/me', authenticateToken, async (req, res) => {
-  const out = await pool.query('SELECT id,name,email FROM users WHERE id=$1', [req.userId]);
+  const out = await pool.query('SELECT id,name,email,profile_picture,default_calendar_id FROM users WHERE id=$1', [req.userId]);
   if (!out.rowCount) return res.status(404).json({ error: 'User not found' });
   res.json({ user: out.rows[0] });
+});
+
+/* ============================ GOOGLE OAUTH ROUTES ============================ */
+
+// Initiate Google OAuth flow
+app.get('/auth/google', (req, res) => {
+  try {
+    const authUrl = googleAuth.getAuthUrl();
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('Error generating auth URL:', error);
+    res.redirect('/login?error=oauth_failed');
+  }
+});
+
+// Google OAuth callback - handles the redirect from Google
+app.get('/auth/google/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.redirect('/login?error=no_code');
+    }
+
+    console.log('📥 Google OAuth callback received');
+
+    // Exchange code for tokens
+    const tokens = await googleAuth.getTokensFromCode(code);
+    console.log('✅ Got tokens from Google');
+
+    // Get user info from Google
+    const userInfo = await googleAuth.getUserInfo(tokens.access_token);
+    console.log('✅ Got user info:', userInfo.email);
+
+    // Check if user exists in database
+    let user = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [userInfo.email]
+    );
+
+    if (user.rows.length === 0) {
+      // Create new user
+      console.log('➕ Creating new user:', userInfo.email);
+      const result = await pool.query(
+        `INSERT INTO users (email, name, google_id, google_access_token, google_refresh_token, profile_picture) 
+         VALUES ($1, $2, $3, $4, $5, $6) 
+         RETURNING *`,
+        [
+          userInfo.email,
+          userInfo.name,
+          userInfo.google_id,
+          tokens.access_token,
+          tokens.refresh_token,
+          userInfo.picture
+        ]
+      );
+      user = result;
+    } else {
+      // Update existing user with Google tokens
+      console.log('🔄 Updating existing user:', userInfo.email);
+      const result = await pool.query(
+        `UPDATE users 
+         SET google_id = $1, google_access_token = $2, google_refresh_token = $3, profile_picture = $4, name = $5
+         WHERE email = $6 
+         RETURNING *`,
+        [
+          userInfo.google_id,
+          tokens.access_token,
+          tokens.refresh_token,
+          userInfo.picture,
+          userInfo.name,
+          userInfo.email
+        ]
+      );
+      user = result;
+    }
+
+    const dbUser = user.rows[0];
+    console.log('✅ User saved to database, ID:', dbUser.id);
+
+    // Create JWT token for session
+    const token = jwt.sign(
+      { userId: dbUser.id, email: dbUser.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Redirect to calendar setup page
+    console.log('➡️  Redirecting to calendar setup');
+    res.redirect(`/calendar-setup?token=${token}`);
+
+  } catch (error) {
+    console.error('❌ OAuth callback error:', error);
+    res.redirect('/login?error=oauth_callback_failed');
+  }
+});
+
+/* ============================= CALENDAR API ================================= */
+
+// Get user's Google Calendars
+app.get('/api/calendars', authenticateToken, async (req, res) => {
+  try {
+    console.log('📅 Fetching calendars for user:', req.user.userId);
+
+    // Get user's Google tokens from database
+    const user = await pool.query(
+      'SELECT google_access_token, google_refresh_token FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+
+    if (user.rows.length === 0 || !user.rows[0].google_refresh_token) {
+      console.log('❌ No Google tokens found');
+      return res.status(401).json({ error: 'Google Calendar not connected', needsReauth: true });
+    }
+
+    const { google_access_token, google_refresh_token } = user.rows[0];
+
+    // Fetch calendars from Google
+    const calendars = await googleAuth.getCalendarList(
+      google_access_token,
+      google_refresh_token
+    );
+
+    console.log(`✅ Found ${calendars.length} calendars`);
+    res.json(calendars);
+
+  } catch (error) {
+    console.error('❌ Error fetching calendars:', error);
+    
+    // If token expired, ask for reauth
+    if (error.message?.includes('invalid_grant') || error.message?.includes('Token has been expired')) {
+      return res.status(401).json({ 
+        error: 'Calendar access expired', 
+        needsReauth: true 
+      });
+    }
+    
+    res.status(500).json({ error: 'Failed to fetch calendars' });
+  }
+});
+
+// Save user's selected default calendar
+app.put('/api/user/calendar', authenticateToken, async (req, res) => {
+  try {
+    const { calendar_id } = req.body;
+    
+    if (!calendar_id) {
+      return res.status(400).json({ error: 'Calendar ID required' });
+    }
+
+    console.log('💾 Saving calendar:', calendar_id, 'for user:', req.user.userId);
+
+    // Update user's default calendar
+    await pool.query(
+      'UPDATE users SET default_calendar_id = $1 WHERE id = $2',
+      [calendar_id, req.user.userId]
+    );
+
+    console.log('✅ Calendar saved');
+    res.json({ success: true, calendar_id });
+
+  } catch (error) {
+    console.error('❌ Error saving calendar:', error);
+    res.status(500).json({ error: 'Failed to save calendar' });
+  }
+});
+
+// Get free/busy information for availability checking
+app.post('/api/calendar/freebusy', authenticateToken, async (req, res) => {
+  try {
+    const { calendar_id, time_min, time_max } = req.body;
+
+    console.log('🔍 Checking free/busy for user:', req.user.userId);
+
+    // Get user's tokens
+    const user = await pool.query(
+      'SELECT google_access_token, google_refresh_token, default_calendar_id FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+
+    if (user.rows.length === 0 || !user.rows[0].google_refresh_token) {
+      return res.status(401).json({ error: 'Google Calendar not connected' });
+    }
+
+    const { google_access_token, google_refresh_token, default_calendar_id } = user.rows[0];
+
+    // Fetch free/busy data
+    const busySlots = await googleAuth.getFreeBusy(
+      google_access_token,
+      google_refresh_token,
+      calendar_id || default_calendar_id,
+      time_min,
+      time_max
+    );
+
+    console.log(`✅ Found ${busySlots.length} busy slots`);
+    res.json({ busy: busySlots });
+
+  } catch (error) {
+    console.error('❌ Error fetching free/busy:', error);
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
+// Disconnect Google Calendar
+app.post('/api/user/disconnect-google', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔌 Disconnecting Google for user:', req.user.userId);
+
+    await pool.query(
+      'UPDATE users SET google_id = NULL, google_access_token = NULL, google_refresh_token = NULL, default_calendar_id = NULL WHERE id = $1',
+      [req.user.userId]
+    );
+
+    console.log('✅ Google disconnected');
+    res.json({ success: true, message: 'Google Calendar disconnected' });
+
+  } catch (error) {
+    console.error('❌ Error disconnecting Google:', error);
+    res.status(500).json({ error: 'Failed to disconnect' });
+  }
 });
 
 /* ----------------------- Analytics (minimal demo) ------------------------- */
@@ -746,6 +978,7 @@ app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'te
 app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'availability.html')));
 app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
 app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
+app.get('/calendar-setup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'calendar-setup.html')));
 
 /* ----------------------------- Debug Endpoints ---------------------------- */
 app.get('/api/debug/email', (req, res) => {

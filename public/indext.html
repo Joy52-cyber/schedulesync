@@ -1,0 +1,219 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScheduleSync - Smart Scheduling Made Easy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .pulse-dot {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="text-white">
+    <!-- Navigation -->
+    <nav class="glass p-4 mb-8">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <h1 class="text-2xl font-bold">⚡ ScheduleSync</h1>
+            </div>
+            <div class="space-x-4">
+                <a href="/login" class="px-4 py-2 hover:text-purple-200 transition">Login</a>
+                <a href="/login" class="px-6 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="container mx-auto px-4 py-16 text-center">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-7xl mb-6">⚡</div>
+            <h1 class="text-6xl font-bold mb-6">
+                Smart Scheduling Made Easy
+            </h1>
+            <p class="text-2xl text-purple-200 mb-8">
+                Schedule meetings, manage teams, and sync with your calendar - all in one place
+            </p>
+            <div class="flex justify-center gap-4">
+                <a href="/login" class="px-8 py-4 bg-white text-purple-600 rounded-lg text-lg font-semibold hover:bg-purple-50 transition">
+                    Start Scheduling
+                </a>
+                <a href="#features" class="px-8 py-4 bg-purple-600 text-white rounded-lg text-lg font-semibold hover:bg-purple-700 transition border-2 border-white">
+                    Learn More
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div id="features" class="container mx-auto px-4 py-16">
+        <h2 class="text-4xl font-bold text-center mb-12">Everything You Need</h2>
+        
+        <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <!-- Feature 1 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">📅</div>
+                <h3 class="text-2xl font-bold mb-4">Easy Booking</h3>
+                <p class="text-purple-200">
+                    Share your booking link and let others schedule meetings with you in seconds. No back-and-forth emails.
+                </p>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">👥</div>
+                <h3 class="text-2xl font-bold mb-4">Team Management</h3>
+                <p class="text-purple-200">
+                    Create teams, manage members, and coordinate schedules across your entire organization.
+                </p>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">📧</div>
+                <h3 class="text-2xl font-bold mb-4">Email Notifications</h3>
+                <p class="text-purple-200">
+                    Automatic email confirmations and reminders keep everyone informed and on schedule.
+                </p>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">🔗</div>
+                <h3 class="text-2xl font-bold mb-4">Calendar Integration</h3>
+                <p class="text-purple-200">
+                    Sync with Google Calendar and Microsoft Outlook to prevent double bookings automatically.
+                </p>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">⏰</div>
+                <h3 class="text-2xl font-bold mb-4">Availability Management</h3>
+                <p class="text-purple-200">
+                    Set your working hours, time zones, and availability rules. Let the system handle the rest.
+                </p>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="glass rounded-lg p-8 feature-card">
+                <div class="text-5xl mb-4">📊</div>
+                <h3 class="text-2xl font-bold mb-4">Analytics Dashboard</h3>
+                <p class="text-purple-200">
+                    Track bookings, monitor team activity, and gain insights into your scheduling patterns.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="container mx-auto px-4 py-16">
+        <h2 class="text-4xl font-bold text-center mb-12">How It Works</h2>
+        
+        <div class="max-w-4xl mx-auto space-y-8">
+            <!-- Step 1 -->
+            <div class="glass rounded-lg p-8 flex items-start space-x-6">
+                <div class="flex-shrink-0 w-12 h-12 bg-white text-purple-600 rounded-full flex items-center justify-center text-2xl font-bold">
+                    1
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-2">Create Your Account</h3>
+                    <p class="text-purple-200">
+                        Sign up in seconds and set up your profile. It's completely free to get started.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="glass rounded-lg p-8 flex items-start space-x-6">
+                <div class="flex-shrink-0 w-12 h-12 bg-white text-purple-600 rounded-full flex items-center justify-center text-2xl font-bold">
+                    2
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-2">Set Your Availability</h3>
+                    <p class="text-purple-200">
+                        Define your working hours, time zones, and when you're available for meetings.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="glass rounded-lg p-8 flex items-start space-x-6">
+                <div class="flex-shrink-0 w-12 h-12 bg-white text-purple-600 rounded-full flex items-center justify-center text-2xl font-bold">
+                    3
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-2">Share Your Link</h3>
+                    <p class="text-purple-200">
+                        Get your unique booking link and share it anywhere - email, website, social media.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="glass rounded-lg p-8 flex items-start space-x-6">
+                <div class="flex-shrink-0 w-12 h-12 bg-white text-purple-600 rounded-full flex items-center justify-center text-2xl font-bold">
+                    4
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-2">Get Booked</h3>
+                    <p class="text-purple-200">
+                        People book meetings directly on your schedule. Automatic confirmations sent to everyone!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="container mx-auto px-4 py-16 text-center">
+        <div class="glass rounded-lg p-12 max-w-4xl mx-auto">
+            <h2 class="text-4xl font-bold mb-6">Ready to Simplify Your Scheduling?</h2>
+            <p class="text-2xl text-purple-200 mb-8">
+                Join teams and professionals who trust ScheduleSync for their scheduling needs
+            </p>
+            <a href="/login" class="inline-block px-8 py-4 bg-white text-purple-600 rounded-lg text-lg font-semibold hover:bg-purple-50 transition">
+                Get Started Free
+            </a>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="glass mt-16 py-8">
+        <div class="container mx-auto px-4 text-center">
+            <div class="text-4xl mb-4">⚡</div>
+            <p class="text-purple-200 mb-4">
+                © 2025 ScheduleSync. All rights reserved.
+            </p>
+            <div class="space-x-6">
+                <a href="/login" class="hover:text-purple-200 transition">Login</a>
+                <a href="/dashboard" class="hover:text-purple-200 transition">Dashboard</a>
+                <a href="/teams" class="hover:text-purple-200 transition">Teams</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

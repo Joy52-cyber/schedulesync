@@ -347,7 +347,7 @@
             event.preventDefault();
 
             const bookingData = {
-                team_id: teamId,
+                team_id: teamData.id, // Use the numeric ID from teamData, not the URL parameter
                 date: selectedDate,
                 time: selectedTime,
                 guest_name: document.getElementById('guestName').value,

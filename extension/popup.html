@@ -1,0 +1,353 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScheduleSync - Setup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 400px;
+            min-height: 500px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .container {
+            padding: 24px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .step {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .question {
+            margin-bottom: 20px;
+        }
+
+        .question-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .option {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .option:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateX(4px);
+        }
+
+        .option.selected {
+            background: white;
+            color: #764ba2;
+            border-color: white;
+        }
+
+        .calendar-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .calendar-icon {
+            font-size: 32px;
+        }
+
+        .calendar-info {
+            flex: 1;
+        }
+
+        .calendar-name {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .calendar-desc {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .connect-btn {
+            background: white;
+            color: #764ba2;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .connect-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .connect-btn.connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: white;
+            color: #764ba2;
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 16px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .progress {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            justify-content: center;
+        }
+
+        .progress-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .progress-dot.active {
+            background: white;
+            width: 24px;
+            border-radius: 4px;
+        }
+
+        .success-icon {
+            font-size: 64px;
+            text-align: center;
+            margin: 24px 0;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .connected-list {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 16px 0;
+        }
+
+        .connected-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .connected-item:last-child {
+            border-bottom: none;
+        }
+
+        .check-icon {
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Progress Indicator -->
+        <div class="progress">
+            <div class="progress-dot active" id="dot1"></div>
+            <div class="progress-dot" id="dot2"></div>
+            <div class="progress-dot" id="dot3"></div>
+        </div>
+
+        <!-- Step 1: Welcome & Usage Questions -->
+        <div class="step active" id="step1">
+            <div class="header">
+                <div class="logo">⚡</div>
+                <h1>Welcome to ScheduleSync!</h1>
+                <p class="subtitle">Let's set up your scheduling assistant</p>
+            </div>
+
+            <div class="question">
+                <label class="question-label">How will you primarily use ScheduleSync?</label>
+                <div class="options">
+                    <div class="option" data-value="personal">
+                        <div style="font-weight: 600; margin-bottom: 4px;">👤 Personal Use</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Schedule meetings for myself</div>
+                    </div>
+                    <div class="option" data-value="team">
+                        <div style="font-weight: 600; margin-bottom: 4px;">👥 Team Management</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Manage team schedules and bookings</div>
+                    </div>
+                    <div class="option" data-value="business">
+                        <div style="font-weight: 600; margin-bottom: 4px;">💼 Business/Client Meetings</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Schedule with clients and partners</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="question">
+                <label class="question-label">How many meetings do you typically have per week?</label>
+                <div class="options">
+                    <div class="option" data-value="few">1-5 meetings</div>
+                    <div class="option" data-value="moderate">6-15 meetings</div>
+                    <div class="option" data-value="many">16+ meetings</div>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="step1Next" disabled>Continue</button>
+        </div>
+
+        <!-- Step 2: Calendar Connection -->
+        <div class="step" id="step2">
+            <div class="header">
+                <div class="logo">📅</div>
+                <h1>Connect Your Calendars</h1>
+                <p class="subtitle">Sync your schedule to prevent double bookings</p>
+            </div>
+
+            <div class="calendar-card">
+                <div class="calendar-icon">📧</div>
+                <div class="calendar-info">
+                    <div class="calendar-name">Google Calendar</div>
+                    <div class="calendar-desc">Sync with Gmail calendar</div>
+                </div>
+                <button class="connect-btn" id="connectGoogle">Connect</button>
+            </div>
+
+            <div class="calendar-card">
+                <div class="calendar-icon">📮</div>
+                <div class="calendar-info">
+                    <div class="calendar-name">Microsoft Outlook</div>
+                    <div class="calendar-desc">Sync with Outlook calendar</div>
+                </div>
+                <button class="connect-btn" id="connectMicrosoft">Connect</button>
+            </div>
+
+            <button class="btn-primary" id="step2Next">Continue</button>
+            <button class="btn-secondary" id="step2Skip">Skip for Now</button>
+        </div>
+
+        <!-- Step 3: Setup Complete -->
+        <div class="step" id="step3">
+            <div class="header">
+                <div class="success-icon">🎉</div>
+                <h1>You're All Set!</h1>
+                <p class="subtitle">ScheduleSync is ready to use</p>
+            </div>
+
+            <div class="connected-list" id="summaryList">
+                <div class="connected-item">
+                    <span class="check-icon">✅</span>
+                    <span>Profile configured</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="openDashboard">
+                Open Dashboard
+            </button>
+            <button class="btn-secondary" id="openBooking">
+                Create Your First Booking
+            </button>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

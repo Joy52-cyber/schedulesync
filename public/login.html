@@ -1,182 +1,167 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - ScheduleSync</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .google-btn {
+            transition: all 0.3s ease;
+        }
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-  <div class="min-h-screen flex items-center justify-center py-12 px-4">
-    <div class="w-full max-w-md">
-      <!-- Card -->
-      <div class="bg-white rounded-lg shadow-xl p-8">
-        <!-- Header -->
-        <div class="text-center mb-8">
-          <div class="text-4xl mb-2">📅</div>
-          <h1 class="text-3xl font-bold text-gray-900">ScheduleSync</h1>
-          <p class="text-gray-500 mt-2">Team Scheduling Platform</p>
+<body class="text-white">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="glass rounded-2xl p-8 w-full max-w-md">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="text-6xl mb-4">⚡</div>
+                <h1 class="text-3xl font-bold mb-2">Welcome to ScheduleSync</h1>
+                <p class="text-purple-200">Smart scheduling made easy</p>
+            </div>
+
+            <!-- Google Sign-In -->
+            <div class="mb-6">
+                <button 
+                    onclick="signInWithGoogle()" 
+                    class="google-btn w-full bg-white text-gray-700 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-50"
+                >
+                    <svg width="20" height="20" viewBox="0 0 20 20">
+                        <path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/>
+                        <path fill="#34A853" d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"/>
+                        <path fill="#FBBC05" d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"/>
+                        <path fill="#EA4335" d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"/>
+                    </svg>
+                    Continue with Google
+                </button>
+                <p class="text-sm text-purple-200 text-center mt-3">
+                    Connect your Google Calendar for smart scheduling
+                </p>
+            </div>
+
+            <!-- Divider -->
+            <div class="relative mb-6">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-white border-opacity-30"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-4 bg-transparent text-purple-200">or continue with email</span>
+                </div>
+            </div>
+
+            <!-- Email Login Form -->
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        required
+                        class="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 border border-white border-opacity-30 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white"
+                        placeholder="you@example.com"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        required
+                        class="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 border border-white border-opacity-30 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white"
+                        placeholder="••••••••"
+                    >
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-white text-purple-600 font-semibold py-3 px-4 rounded-lg hover:bg-purple-50 transition"
+                >
+                    Sign In
+                </button>
+            </form>
+
+            <!-- Sign Up Link -->
+            <div class="mt-6 text-center">
+                <p class="text-purple-200">
+                    Don't have an account? 
+                    <a href="/signup" class="text-white font-semibold hover:underline">Sign up</a>
+                </p>
+            </div>
+
+            <!-- Benefits -->
+            <div class="mt-8 pt-6 border-t border-white border-opacity-20">
+                <p class="text-sm text-purple-200 mb-3">With Google Sign-In you get:</p>
+                <ul class="space-y-2 text-sm">
+                    <li class="flex items-center gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Automatic calendar sync</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Real-time availability</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Auto-create Google Meet links</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Prevent double bookings</span>
+                    </li>
+                </ul>
+            </div>
         </div>
-
-        <!-- Tabs -->
-        <div class="flex gap-0 mb-8 border-b border-gray-200">
-          <button id="loginTab" onclick="switchAuthTab('login')" class="flex-1 py-3 border-b-2 border-blue-600 text-blue-600 font-semibold">Login</button>
-          <button id="signupTab" onclick="switchAuthTab('signup')" class="flex-1 py-3 text-gray-600 font-semibold">Sign Up</button>
-        </div>
-
-        <!-- Login Form -->
-        <div id="loginForm" class="fade-in">
-          <form onsubmit="handleLogin(event)">
-            <input type="email" id="loginEmail" placeholder="Email address" class="w-full px-4 py-2 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-            <input type="password" id="loginPassword" placeholder="Password" class="w-full px-4 py-2 mb-6 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-            <button type="submit" class="w-full gradient-bg text-white font-semibold py-2 rounded-lg hover:shadow-lg transition">Sign In</button>
-          </form>
-        </div>
-
-        <!-- Signup Form -->
-        <div id="signupForm" class="fade-in" style="display: none;">
-          <form onsubmit="handleSignup(event)">
-            <input type="text" id="signupName" placeholder="Full name" class="w-full px-4 py-2 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-            <input type="email" id="signupEmail" placeholder="Email address" class="w-full px-4 py-2 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-            <input type="password" id="signupPassword" placeholder="Password" class="w-full px-4 py-2 mb-6 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600" required>
-            <button type="submit" class="w-full gradient-bg text-white font-semibold py-2 rounded-lg hover:shadow-lg transition">Create Account</button>
-          </form>
-        </div>
-
-        <!-- Error Message -->
-        <div id="errorMessage" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg hidden"></div>
-
-        <!-- Loading -->
-        <div id="loadingMessage" class="mt-4 text-center text-gray-600 hidden">
-          <p>Loading...</p>
-        </div>
-      </div>
-
-      <!-- Footer -->
-      <p class="text-center text-gray-600 text-sm mt-6">
-        Team scheduling made simple. Create teams, share booking links, manage meetings—all in one place.
-      </p>
     </div>
-  </div>
 
-  <style>
-    .fade-in {
-      animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-  </style>
-
-  <script>
-    const API_BASE = `${window.location.protocol}//${window.location.host}`;
-
-    // Check if already logged in
-    if (localStorage.getItem('token')) {
-      window.location.href = '/dashboard';
-    }
-
-    function switchAuthTab(tab) {
-      const loginForm = document.getElementById('loginForm');
-      const signupForm = document.getElementById('signupForm');
-      const loginTab = document.getElementById('loginTab');
-      const signupTab = document.getElementById('signupTab');
-
-      if (tab === 'login') {
-        loginForm.style.display = 'block';
-        signupForm.style.display = 'none';
-        loginTab.classList.add('border-b-2', 'border-blue-600', 'text-blue-600');
-        signupTab.classList.remove('border-b-2', 'border-blue-600', 'text-blue-600');
-        loginTab.classList.add('font-semibold');
-        signupTab.classList.remove('font-semibold');
-      } else {
-        loginForm.style.display = 'none';
-        signupForm.style.display = 'block';
-        loginTab.classList.remove('border-b-2', 'border-blue-600', 'text-blue-600');
-        signupTab.classList.add('border-b-2', 'border-blue-600', 'text-blue-600');
-        loginTab.classList.remove('font-semibold');
-        signupTab.classList.add('font-semibold');
-      }
-    }
-
-    function showError(message) {
-      const errorDiv = document.getElementById('errorMessage');
-      errorDiv.textContent = message;
-      errorDiv.classList.remove('hidden');
-      setTimeout(() => errorDiv.classList.add('hidden'), 5000);
-    }
-
-    function showLoading(show) {
-      const loadingDiv = document.getElementById('loadingMessage');
-      if (show) {
-        loadingDiv.classList.remove('hidden');
-      } else {
-        loadingDiv.classList.add('hidden');
-      }
-    }
-
-    async function handleLogin(event) {
-      event.preventDefault();
-      showLoading(true);
-
-      const email = document.getElementById('loginEmail').value;
-      const password = document.getElementById('loginPassword').value;
-
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-          window.location.href = '/dashboard';
-        } else {
-          showError(data.error || 'Login failed');
+    <script>
+        // Google Sign-In
+        function signInWithGoogle() {
+            window.location.href = '/auth/google';
         }
-      } catch (error) {
-        showError('Error: ' + error.message);
-      } finally {
-        showLoading(false);
-      }
-    }
 
-    async function handleSignup(event) {
-      event.preventDefault();
-      showLoading(true);
-
-      const name = document.getElementById('signupName').value;
-      const email = document.getElementById('signupEmail').value;
-      const password = document.getElementById('signupPassword').value;
-
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/signup`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password })
+        // Email/Password Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    window.location.href = '/dashboard';
+                } else {
+                    alert(data.error || 'Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Failed to login. Please try again.');
+            }
         });
-
-        const data = await response.json();
-
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-          window.location.href = '/dashboard';
-        } else {
-          showError(data.error || 'Signup failed');
-        }
-      } catch (error) {
-        showError('Error: ' + error.message);
-      } finally {
-        showLoading(false);
-      }
-    }
-  </script>
+    </script>
 </body>
 </html>
