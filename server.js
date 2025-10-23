@@ -7,6 +7,15 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
 
+// Email service (optional - gracefully handles if not configured)
+let emailService = null;
+try {
+  emailService = require('./email-service');
+  console.log('✅ Email service loaded');
+} catch (error) {
+  console.log('ℹ️  Email service not found - emails will be disabled');
+}
+
 const app = express();
 
 /* ---------------------------------- Config --------------------------------- */
@@ -110,6 +119,8 @@ async function initDatabase() {
       guest_name VARCHAR(255) NOT NULL,
       guest_email VARCHAR(255) NOT NULL,
       guest_notes TEXT,
+      booking_date DATE,
+      booking_time VARCHAR(50),
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -416,10 +427,25 @@ app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
 app.get('/api/teams/:id/public', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      'SELECT id, name, description FROM teams WHERE id = $1 OR public_url = $1',
-      [id]
-    );
+    
+    // Try to parse as integer, if it fails, it's a public_url string
+    const isNumeric = /^\d+$/.test(id);
+    
+    let result;
+    if (isNumeric) {
+      // Search by ID
+      result = await pool.query(
+        'SELECT id, name, description FROM teams WHERE id = $1',
+        [parseInt(id)]
+      );
+    } else {
+      // Search by public_url
+      result = await pool.query(
+        'SELECT id, name, description FROM teams WHERE public_url = $1',
+        [id]
+      );
+    }
+    
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Team not found' });
     }
@@ -438,12 +464,38 @@ app.get('/api/teams/:id/public', async (req, res) => {
 app.post('/api/bookings', async (req, res) => {
   try {
     const { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
+    
+    // Get team info
+    const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [team_id]);
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const team = teamResult.rows[0];
+    
+    // Create booking
     const result = await pool.query(
-      `INSERT INTO bookings (team_id, slot_id, guest_name, guest_email, guest_notes, status)
-       VALUES ($1, 1, $2, $3, $4, 'pending') RETURNING *`,
-      [team_id, guest_name, guest_email, guest_notes || '']
+      `INSERT INTO bookings (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time)
+       VALUES ($1, 1, $2, $3, $4, 'confirmed', $5, $6) RETURNING *`,
+      [team_id, guest_name, guest_email, guest_notes || '', date, time]
     );
-    res.status(201).json({ booking: result.rows[0] });
+    
+    const booking = result.rows[0];
+    
+    // Send emails if service is available
+    if (emailService) {
+      // Send confirmation to guest
+      emailService.sendBookingConfirmation(booking, team)
+        .catch(err => console.error('Email error:', err));
+      
+      // Send notification to team owner
+      const ownerResult = await pool.query('SELECT email FROM users WHERE id = $1', [team.owner_id]);
+      if (ownerResult.rows.length > 0) {
+        emailService.sendBookingNotificationToOwner(booking, team, ownerResult.rows[0].email)
+          .catch(err => console.error('Email error:', err));
+      }
+    }
+    
+    res.status(201).json({ booking: result.rows[0], emailSent: !!emailService });
   } catch (error) {
     console.error('Error creating booking:', error);
     res.status(500).json({ error: 'Failed to create booking' });
