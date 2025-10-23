@@ -1,0 +1,364 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Calendar - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .calendar-card {
+            transition: all 0.3s ease;
+        }
+        .calendar-card:hover {
+            transform: translateX(4px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .calendar-card.selected {
+            background: white;
+            color: #764ba2;
+            border-color: white;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="glass rounded-2xl p-8 w-full max-w-2xl">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="text-6xl mb-4">📅</div>
+                <h1 class="text-3xl font-bold mb-2" id="pageTitle">Connect Your Calendar</h1>
+                <p class="text-purple-200" id="pageSubtitle">Link your Google Calendar to get started</p>
+            </div>
+
+            <!-- Success Message -->
+            <div id="successMessage" class="hidden mb-6 p-4 bg-green-500 bg-opacity-20 border border-green-500 rounded-lg">
+                <p class="text-sm">✓ Google Calendar connected successfully!</p>
+            </div>
+
+            <!-- Not Connected State -->
+            <div id="notConnectedState" class="hidden">
+                <div class="text-center">
+                    <p class="text-purple-200 mb-6">
+                        Connect your Google Calendar to automatically sync your availability and create Google Meet links for bookings.
+                    </p>
+                    <button 
+                        onclick="connectGoogle()" 
+                        class="inline-flex items-center gap-2 bg-white text-purple-600 font-semibold py-3 px-6 rounded-lg hover:bg-purple-50 transition"
+                    >
+                        <svg class="w-5 h-5" viewBox="0 0 48 48">
+                            <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
+                            <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
+                            <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
+                            <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+                        </svg>
+                        Connect Google Calendar
+                    </button>
+                    
+                    <div class="mt-8 glass rounded-lg p-4 text-left">
+                        <h3 class="font-semibold mb-3">What you'll get:</h3>
+                        <ul class="space-y-2 text-sm text-purple-200">
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Automatic availability syncing
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Google Meet links for all bookings
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Calendar invites sent automatically
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                Real-time conflict detection
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="hidden text-center py-8">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                <p class="mt-4 text-purple-200">Loading your calendars...</p>
+            </div>
+
+            <!-- Calendar List -->
+            <div id="calendarList" class="hidden space-y-3">
+                <!-- Calendars will be populated here -->
+            </div>
+
+            <!-- Continue Button -->
+            <div id="continueSection" class="hidden mt-8">
+                <button 
+                    id="continueBtn" 
+                    disabled
+                    class="w-full bg-white text-purple-600 font-semibold py-3 px-4 rounded-lg hover:bg-purple-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Continue to Dashboard
+                </button>
+                <p class="text-center text-purple-200 text-sm mt-4">
+                    You can change your calendar later in settings
+                </p>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mt-4 p-4 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg">
+                <p class="text-sm"></p>
+            </div>
+
+            <!-- Skip Link -->
+            <div class="text-center mt-6">
+                <a href="/dashboard" class="text-purple-200 hover:text-white transition text-sm underline">
+                    Skip for now
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedCalendarId = null;
+
+        // Check URL parameters on load
+        const urlParams = new URLSearchParams(window.location.search);
+        const connected = urlParams.get('connected');
+        const error = urlParams.get('error');
+
+        if (connected === 'true') {
+            document.getElementById('successMessage').classList.remove('hidden');
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        if (error) {
+            showError('Error connecting calendar: ' + error);
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Load calendars or show connect button
+        document.addEventListener('DOMContentLoaded', checkConnection);
+
+        async function checkConnection() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                // Try to load calendars (this will fail if not connected)
+                const response = await fetch('/api/calendars', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    // Not connected - show connect button
+                    showNotConnectedState();
+                } else if (response.ok) {
+                    // Connected - show calendar list
+                    const calendars = await response.json();
+                    showCalendarSelection();
+                    displayCalendars(calendars);
+                } else {
+                    throw new Error('Failed to check connection status');
+                }
+
+            } catch (error) {
+                console.error('Error checking connection:', error);
+                showNotConnectedState();
+            }
+        }
+
+        function showNotConnectedState() {
+            document.getElementById('pageTitle').textContent = 'Connect Your Calendar';
+            document.getElementById('pageSubtitle').textContent = 'Link your Google Calendar to get started';
+            document.getElementById('notConnectedState').classList.remove('hidden');
+        }
+
+        function showCalendarSelection() {
+            document.getElementById('pageTitle').textContent = 'Select Your Calendar';
+            document.getElementById('pageSubtitle').textContent = 'Choose which calendar to use for bookings';
+            document.getElementById('loading').classList.remove('hidden');
+        }
+
+        async function connectGoogle() {
+            try {
+                const response = await fetch('/api/auth/google');
+                const data = await response.json();
+
+                if (data.authUrl) {
+                    // Redirect to Google OAuth
+                    window.location.href = data.authUrl;
+                } else {
+                    showError('Failed to generate authorization URL');
+                }
+            } catch (error) {
+                console.error('Error connecting:', error);
+                showError('Failed to connect to Google Calendar: ' + error.message);
+            }
+        }
+
+        async function loadCalendars() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/calendars', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        showError('Calendar access expired. Please reconnect.');
+                        setTimeout(() => connectGoogle(), 2000);
+                        return;
+                    }
+                    throw new Error('Failed to load calendars');
+                }
+
+                const calendars = await response.json();
+                displayCalendars(calendars);
+
+            } catch (error) {
+                console.error('Error loading calendars:', error);
+                showError('Failed to load calendars. Please try again.');
+            }
+        }
+
+        function displayCalendars(calendars) {
+            const loading = document.getElementById('loading');
+            const calendarList = document.getElementById('calendarList');
+            const continueSection = document.getElementById('continueSection');
+
+            loading.classList.add('hidden');
+            calendarList.classList.remove('hidden');
+            continueSection.classList.remove('hidden');
+
+            if (calendars.length === 0) {
+                calendarList.innerHTML = '<p class="text-center text-purple-200">No calendars found</p>';
+                return;
+            }
+
+            calendarList.innerHTML = calendars.map(cal => `
+                <div 
+                    class="calendar-card glass rounded-lg p-4 cursor-pointer border-2 border-white border-opacity-20"
+                    data-calendar-id="${cal.id}"
+                    onclick="selectCalendar('${cal.id.replace(/'/g, "\\'")}', event)"
+                >
+                    <div class="flex items-center gap-4">
+                        <div 
+                            class="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                            style="background-color: ${cal.backgroundColor || '#667eea'};"
+                        >
+                            📅
+                        </div>
+                        <div class="flex-1">
+                            <div class="font-semibold text-lg">
+                                ${cal.name}
+                                ${cal.primary ? '<span class="ml-2 text-xs bg-white bg-opacity-20 px-2 py-1 rounded">Primary</span>' : ''}
+                            </div>
+                            <div class="text-sm opacity-80">
+                                ${cal.timezone || 'UTC'}
+                            </div>
+                        </div>
+                        <div class="check-icon hidden">
+                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Auto-select primary calendar
+            const primaryCal = calendars.find(cal => cal.primary);
+            if (primaryCal) {
+                selectCalendar(primaryCal.id);
+            }
+        }
+
+        function selectCalendar(calendarId, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+
+            // Remove selection from all cards
+            document.querySelectorAll('.calendar-card').forEach(card => {
+                card.classList.remove('selected');
+                const checkIcon = card.querySelector('.check-icon');
+                if (checkIcon) checkIcon.classList.add('hidden');
+            });
+
+            // Select clicked card
+            const card = document.querySelector(`[data-calendar-id="${calendarId}"]`);
+            if (card) {
+                card.classList.add('selected');
+                const checkIcon = card.querySelector('.check-icon');
+                if (checkIcon) checkIcon.classList.remove('hidden');
+            }
+
+            selectedCalendarId = calendarId;
+            document.getElementById('continueBtn').disabled = false;
+        }
+
+        async function saveCalendar() {
+            if (!selectedCalendarId) return;
+
+            try {
+                const continueBtn = document.getElementById('continueBtn');
+                continueBtn.disabled = true;
+                continueBtn.textContent = 'Saving...';
+
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/user/calendar', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ calendar_id: selectedCalendarId })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save calendar');
+                }
+
+                // Redirect to dashboard
+                window.location.href = '/dashboard';
+
+            } catch (error) {
+                console.error('Error saving calendar:', error);
+                showError('Failed to save calendar. Please try again.');
+                document.getElementById('continueBtn').disabled = false;
+                document.getElementById('continueBtn').textContent = 'Continue to Dashboard';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.querySelector('p').textContent = message;
+            errorDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                errorDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Continue button click handler
+        document.getElementById('continueBtn').addEventListener('click', saveCalendar);
+    </script>
+</body>
+</html>
