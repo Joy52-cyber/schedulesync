@@ -785,6 +785,78 @@ app.post('/api/teams/:id/members', authenticateToken, async (req, res) => {
   }
 });
 
+// Remove team member
+app.delete('/api/teams/:teamId/members/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, memberId } = req.params;
+    const currentUserId = req.userId;
+    
+    // Check if current user is team owner
+    const teamResult = await pool.query(
+      'SELECT owner_id FROM teams WHERE id = $1',
+      [teamId]
+    );
+    
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    
+    const isOwner = teamResult.rows[0].owner_id === currentUserId;
+    
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only team owner can remove members' });
+    }
+    
+    // Delete the member
+    const result = await pool.query(
+      'DELETE FROM team_members WHERE id = $1 AND team_id = $2 RETURNING *',
+      [memberId, teamId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    
+    res.json({ success: true, message: 'Member removed from team' });
+  } catch (error) {
+    console.error('Error removing member:', error);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// Remove team member
+app.delete('/api/teams/:teamId/members/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, memberId } = req.params;
+    const userId = req.userId;
+    
+    // Check if user is team owner
+    const teamResult = await pool.query('SELECT owner_id FROM teams WHERE id = $1', [teamId]);
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    
+    if (teamResult.rows[0].owner_id !== userId) {
+      return res.status(403).json({ error: 'Only team owner can remove members' });
+    }
+    
+    // Remove member
+    const result = await pool.query(
+      'DELETE FROM team_members WHERE id = $1 AND team_id = $2 RETURNING *',
+      [memberId, teamId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    
+    res.json({ success: true, message: 'Member removed from team' });
+  } catch (error) {
+    console.error('Error removing member:', error);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
 // Get team availability
 app.get('/api/teams/:id/availability', authenticateToken, async (req, res) => {
   try {
