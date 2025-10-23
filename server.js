@@ -1,6 +1,16 @@
 ﻿// server.js
 require('dotenv').config();
-const googleAuth = require('./google-auth-service');
+
+// Google Auth service (optional - gracefully handles if not configured)
+let googleAuth = null;
+try {
+  googleAuth = require('./google-auth-service');
+  console.log('✅ Google Auth service loaded');
+} catch (error) {
+  console.log('⚠️  Google Auth service not found - OAuth will be disabled');
+  console.log('   Error:', error.message);
+}
+
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -353,6 +363,9 @@ app.get('/api/users/me', authenticateToken, async (req, res) => {
 
 // Initiate Google OAuth flow
 app.get('/auth/google', (req, res) => {
+  if (!googleAuth) {
+    return res.status(503).json({ error: 'Google OAuth not configured', message: 'google-auth-service.js is missing' });
+  }
   try {
     const authUrl = googleAuth.getAuthUrl();
     res.redirect(authUrl);
@@ -364,6 +377,9 @@ app.get('/auth/google', (req, res) => {
 
 // Google OAuth callback - handles the redirect from Google
 app.get('/auth/google/callback', async (req, res) => {
+  if (!googleAuth) {
+    return res.redirect('/login?error=oauth_not_configured');
+  }
   try {
     const { code } = req.query;
     
@@ -448,6 +464,9 @@ app.get('/auth/google/callback', async (req, res) => {
 
 // Get user's Google Calendars
 app.get('/api/calendars', authenticateToken, async (req, res) => {
+  if (!googleAuth) {
+    return res.status(503).json({ error: 'Google OAuth not configured' });
+  }
   try {
     console.log('📅 Fetching calendars for user:', req.user.userId);
 
@@ -516,6 +535,9 @@ app.put('/api/user/calendar', authenticateToken, async (req, res) => {
 
 // Get free/busy information for availability checking
 app.post('/api/calendar/freebusy', authenticateToken, async (req, res) => {
+  if (!googleAuth) {
+    return res.status(503).json({ error: 'Google OAuth not configured' });
+  }
   try {
     const { calendar_id, time_min, time_max } = req.body;
 
