@@ -939,6 +939,25 @@ app.get('/api/calendar/connections', async (req, res) => {
   res.json({ connections: out.rows });
 });
 
+// -----------------------------------------------------------------------------
+// Google OAuth Callback
+// -----------------------------------------------------------------------------
+app.get('/api/calendar/google/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    console.log('✅ Google OAuth callback received with code:', code);
+
+    // TODO: In the future, exchange this `code` for tokens via Google's OAuth endpoint.
+    // For now, we’ll just confirm success visually.
+    const redirectUrl = `${process.env.APP_URL || 'https://schedulesync-production.up.railway.app'}/dashboard?success=google_connected`;
+    res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('❌ Error handling Google callback:', error);
+    res.status(500).send('Google authentication failed.');
+  }
+});
+
+
 /* -------------------------- Google OAuth: Auth URL ------------------------ */
 app.get('/api/calendar/google/auth', (req, res) => {
   if (assertGoogleConfigured(res)) return;
