@@ -900,7 +900,7 @@ app.get('/api/calendar/google/auth', (req, res) => {
   const authUrl =
     `https://accounts.google.com/o/oauth2/v2/auth` +
     `?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(GOOGLE_CALLBACK_URL)}` +
+    `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
     `&response_type=code` +
     `&scope=${encodeURIComponent('https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events')}` +
     `&access_type=offline&prompt=consent` +
@@ -961,7 +961,7 @@ app.delete('/api/calendar/connections/:id', async (req, res) => {
 /* --------------------------- Config Status (UI) --------------------------- */
 app.get('/api/config/status', (_req, res) => {
   const microsoftConfigured = !!(MICROSOFT_CLIENT_ID && MICROSOFT_CLIENT_SECRET && MICROSOFT_CALLBACK_URL);
-  const googleConfigured    = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_CALLBACK_URL);
+  const googleConfigured    = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
   res.json({
     microsoft: { configured: microsoftConfigured, clientId: microsoftConfigured ? '✓ Set' : '✗ Not set' },
     google:    { configured: googleConfigured,    clientId: googleConfigured ? '✓ Set' : '✗ Not set' },
