@@ -666,6 +666,33 @@ app.get('/api/teams', authenticateToken, async (req, res) => {
   }
 });
 
+// Get single team by ID
+app.get('/api/teams/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    
+    // Get team info
+    const result = await pool.query(
+      `SELECT t.*, COUNT(tm.id) as member_count
+       FROM teams t
+       LEFT JOIN team_members tm ON t.id = tm.team_id
+       WHERE t.id = $1 AND t.owner_id = $2
+       GROUP BY t.id`,
+      [id, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    
+    res.json({ team: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching team:', error);
+    res.status(500).json({ error: 'Failed to fetch team' });
+  }
+});
+
 // Create new team
 app.post('/api/teams', authenticateToken, async (req, res) => {
   try {
