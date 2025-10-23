@@ -33,7 +33,7 @@ const pool = new Pool({
 // Google - Support both variable names
 const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_CLIENT_SECRET = clean(process.env.GOOGLE_CLIENT_SECRET);
-const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL);
+const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URI);
 
 // Microsoft
 const MICROSOFT_CLIENT_ID     = clean(process.env.MICROSOFT_CLIENT_ID);
