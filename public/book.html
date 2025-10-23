@@ -4,203 +4,611 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book a Meeting - ScheduleSync</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8f9fa;
             min-height: 100vh;
         }
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .time-slot-btn {
-            transition: all 0.2s ease;
-        }
-        .time-slot-btn:hover:not(:disabled) {
-            transform: scale(1.05);
-        }
-        .time-slot-btn.selected {
+
+        /* Header matching ScheduleSync design */
+        .header {
             background: white;
-            color: #764ba2;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        .calendar-day {
-            transition: all 0.2s ease;
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #6366f1;
         }
-        .calendar-day:hover:not(.disabled) {
-            transform: scale(1.05);
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+
+        /* Page header */
+        .page-header {
+            margin-bottom: 2.5rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            font-size: 1rem;
+            color: #6b7280;
+        }
+
+        /* Team info card */
+        .team-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .team-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .team-avatar {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .team-info h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .team-info p {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        /* Tab filters matching your UI */
+        .filter-tabs {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 0.625rem 1.25rem;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #6b7280;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .calendar-day.selected {
+
+        .tab:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+
+        .tab.active {
+            background: #6366f1;
+            color: white;
+            border-color: #6366f1;
+        }
+
+        /* Content card */
+        .content-card {
             background: white;
-            color: #764ba2;
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Calendar grid */
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .calendar-month {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .calendar-nav {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .calendar-day-label {
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #6b7280;
+            padding: 0.5rem;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-weight: 500;
+            color: #374151;
+            transition: all 0.2s;
+        }
+
+        .calendar-day:hover:not(.disabled):not(.empty) {
+            border-color: #6366f1;
+            background: #f5f5ff;
+            color: #6366f1;
+        }
+
+        .calendar-day.selected {
+            background: #6366f1;
+            color: white;
+            border-color: #6366f1;
+        }
+
         .calendar-day.disabled {
             opacity: 0.3;
             cursor: not-allowed;
+            background: #f9fafb;
+        }
+
+        .calendar-day.empty {
+            border: none;
+            background: transparent;
+        }
+
+        /* Time slots grid */
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .time-slot {
+            padding: 0.875rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #374151;
+            transition: all 0.2s;
+        }
+
+        .time-slot:hover {
+            border-color: #6366f1;
+            background: #f5f5ff;
+            color: #6366f1;
+        }
+
+        .time-slot.selected {
+            background: #6366f1;
+            color: white;
+            border-color: #6366f1;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 2rem;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        /* Success/Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .empty-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: #f3f4f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .empty-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-subtitle {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        .success-icon {
+            background: #10b981;
+            color: white;
+        }
+
+        .booking-details {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: left;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 500;
+            color: #6b7280;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+
+            .container {
+                padding: 2rem 1rem;
+            }
+
+            .content-card {
+                padding: 1.5rem;
+            }
+
+            .team-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .time-slots {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
-<body class="text-white">
+<body>
     <!-- Header -->
-    <div class="container mx-auto px-4 py-8">
-        <div class="text-center mb-8">
-            <h1 class="text-5xl font-bold mb-4">⚡ ScheduleSync</h1>
-            <p class="text-xl text-purple-200">Schedule your meeting</p>
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">📅</div>
+            <span>ScheduleSync</span>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <p>Loading booking information...</p>
         </div>
 
-        <!-- Main Booking Container -->
-        <div class="max-w-4xl mx-auto">
-            <!-- Step Indicator -->
-            <div class="mb-8 flex justify-center space-x-4">
-                <div id="step1Indicator" class="flex items-center space-x-2">
-                    <div class="w-8 h-8 rounded-full bg-white text-purple-600 flex items-center justify-center font-bold">1</div>
-                    <span class="font-semibold">Select Date</span>
-                </div>
-                <div class="w-16 h-1 bg-white bg-opacity-30 self-center"></div>
-                <div id="step2Indicator" class="flex items-center space-x-2 opacity-50">
-                    <div class="w-8 h-8 rounded-full bg-white text-purple-600 flex items-center justify-center font-bold">2</div>
-                    <span class="font-semibold">Select Time</span>
-                </div>
-                <div class="w-16 h-1 bg-white bg-opacity-30 self-center"></div>
-                <div id="step3Indicator" class="flex items-center space-x-2 opacity-50">
-                    <div class="w-8 h-8 rounded-full bg-white text-purple-600 flex items-center justify-center font-bold">3</div>
-                    <span class="font-semibold">Your Details</span>
+        <!-- Main Content -->
+        <div id="mainContent" class="hidden">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1 class="page-title">Book a Meeting</h1>
+                <p class="page-subtitle">Schedule your appointment in a few simple steps</p>
+            </div>
+
+            <!-- Team Info Card -->
+            <div class="team-card">
+                <div class="team-header">
+                    <div class="team-avatar">👥</div>
+                    <div class="team-info">
+                        <h2 id="teamName">Loading...</h2>
+                        <p id="teamDescription">Please wait...</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Team Info -->
-            <div id="teamInfo" class="glass rounded-lg p-6 mb-6">
-                <div class="flex items-center space-x-4">
-                    <div class="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-3xl">
-                        👥
-                    </div>
-                    <div>
-                        <h2 id="teamName" class="text-2xl font-bold">Loading...</h2>
-                        <p id="teamDescription" class="text-purple-200">Please wait...</p>
-                    </div>
-                </div>
+            <!-- Step Tabs -->
+            <div class="filter-tabs">
+                <div class="tab active" id="step1Tab">📅 Select Date</div>
+                <div class="tab" id="step2Tab">⏰ Select Time</div>
+                <div class="tab" id="step3Tab">✍️ Your Details</div>
             </div>
 
             <!-- Step 1: Date Selection -->
-            <div id="step1" class="glass rounded-lg p-8">
-                <h3 class="text-2xl font-bold mb-6">Select a Date</h3>
+            <div id="step1" class="content-card">
+                <h3 class="section-title">Select a Date</h3>
                 
-                <!-- Month Navigation -->
-                <div class="flex justify-between items-center mb-6">
-                    <button onclick="previousMonth()" class="px-4 py-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30">
-                        ← Previous
-                    </button>
-                    <h4 id="currentMonth" class="text-xl font-semibold"></h4>
-                    <button onclick="nextMonth()" class="px-4 py-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30">
-                        Next →
-                    </button>
+                <div class="calendar-header">
+                    <h4 class="calendar-month" id="currentMonth"></h4>
+                    <div class="calendar-nav">
+                        <button class="nav-btn" onclick="previousMonth()">← Previous</button>
+                        <button class="nav-btn" onclick="nextMonth()">Next →</button>
+                    </div>
                 </div>
 
-                <!-- Calendar Grid -->
-                <div class="grid grid-cols-7 gap-2">
-                    <div class="text-center font-semibold p-2">Sun</div>
-                    <div class="text-center font-semibold p-2">Mon</div>
-                    <div class="text-center font-semibold p-2">Tue</div>
-                    <div class="text-center font-semibold p-2">Wed</div>
-                    <div class="text-center font-semibold p-2">Thu</div>
-                    <div class="text-center font-semibold p-2">Fri</div>
-                    <div class="text-center font-semibold p-2">Sat</div>
+                <div class="calendar-grid">
+                    <div class="calendar-day-label">Sun</div>
+                    <div class="calendar-day-label">Mon</div>
+                    <div class="calendar-day-label">Tue</div>
+                    <div class="calendar-day-label">Wed</div>
+                    <div class="calendar-day-label">Thu</div>
+                    <div class="calendar-day-label">Fri</div>
+                    <div class="calendar-day-label">Sat</div>
                 </div>
-                <div id="calendarDays" class="grid grid-cols-7 gap-2 mt-2">
+                <div id="calendarDays" class="calendar-grid">
                     <!-- Calendar days will be generated here -->
                 </div>
             </div>
 
             <!-- Step 2: Time Selection -->
-            <div id="step2" class="hidden glass rounded-lg p-8">
-                <h3 class="text-2xl font-bold mb-2">Select a Time</h3>
-                <p class="text-purple-200 mb-6">
-                    <span id="selectedDate"></span> • Time zone: Philippine Time (GMT+8)
+            <div id="step2" class="content-card hidden">
+                <h3 class="section-title">Select a Time</h3>
+                <p class="page-subtitle" style="margin-bottom: 1.5rem;">
+                    <span id="selectedDateDisplay"></span> • Philippine Time (GMT+8)
                 </p>
                 
-                <div id="timeSlots" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div id="timeSlots" class="time-slots">
                     <!-- Time slots will be generated here -->
                 </div>
 
-                <div class="mt-6">
-                    <button onclick="goToStep(1)" class="px-6 py-3 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30">
-                        ← Back to Date
-                    </button>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" onclick="goToStep(1)">← Back to Date</button>
                 </div>
             </div>
 
             <!-- Step 3: Guest Details -->
-            <div id="step3" class="hidden glass rounded-lg p-8">
-                <h3 class="text-2xl font-bold mb-6">Enter Your Details</h3>
+            <div id="step3" class="content-card hidden">
+                <h3 class="section-title">Enter Your Details</h3>
                 
                 <form id="bookingForm" onsubmit="submitBooking(event)">
-                    <div class="mb-4">
-                        <label class="block mb-2 font-semibold">Your Name *</label>
-                        <input type="text" id="guestName" required
-                               class="w-full px-4 py-3 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white placeholder-purple-200"
-                               placeholder="John Doe">
+                    <div class="form-group">
+                        <label for="guestName">Your Name *</label>
+                        <input type="text" id="guestName" placeholder="John Doe" required>
                     </div>
 
-                    <div class="mb-4">
-                        <label class="block mb-2 font-semibold">Email Address *</label>
-                        <input type="email" id="guestEmail" required
-                               class="w-full px-4 py-3 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white placeholder-purple-200"
-                               placeholder="john@example.com">
+                    <div class="form-group">
+                        <label for="guestEmail">Email Address *</label>
+                        <input type="email" id="guestEmail" placeholder="john@example.com" required>
                     </div>
 
-                    <div class="mb-6">
-                        <label class="block mb-2 font-semibold">Notes (Optional)</label>
-                        <textarea id="guestNotes" rows="4"
-                                  class="w-full px-4 py-3 bg-white bg-opacity-20 rounded-lg border border-white border-opacity-30 text-white placeholder-purple-200"
-                                  placeholder="What would you like to discuss?"></textarea>
+                    <div class="form-group">
+                        <label for="guestNotes">Additional Notes (Optional)</label>
+                        <textarea id="guestNotes" placeholder="What would you like to discuss?"></textarea>
                     </div>
 
-                    <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-6">
-                        <h4 class="font-semibold mb-2">Meeting Summary:</h4>
-                        <p id="bookingSummary" class="text-purple-200"></p>
+                    <div class="booking-details">
+                        <h4 style="font-weight: 600; color: #1f2937; margin-bottom: 1rem;">Meeting Summary</h4>
+                        <div id="bookingSummary"></div>
                     </div>
 
-                    <div class="flex space-x-3">
-                        <button type="button" onclick="goToStep(2)" class="flex-1 px-6 py-3 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30">
-                            ← Back
-                        </button>
-                        <button type="submit" class="flex-1 px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50">
-                            Confirm Booking
-                        </button>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+                        <button type="submit" class="btn btn-primary">Confirm Booking</button>
                     </div>
                 </form>
             </div>
 
             <!-- Step 4: Confirmation -->
-            <div id="step4" class="hidden glass rounded-lg p-8 text-center">
-                <div class="text-6xl mb-4">✅</div>
-                <h3 class="text-3xl font-bold mb-4">Booking Confirmed!</h3>
-                <p class="text-xl text-purple-200 mb-8">
-                    Your meeting has been scheduled. You'll receive a confirmation email shortly.
-                </p>
-                
-                <div class="bg-white bg-opacity-10 rounded-lg p-6 mb-8 text-left max-w-md mx-auto">
-                    <h4 class="font-semibold mb-4">Meeting Details:</h4>
-                    <p id="confirmationDetails" class="text-purple-200 space-y-2"></p>
-                </div>
+            <div id="step4" class="content-card hidden">
+                <div class="empty-state">
+                    <div class="empty-icon success-icon">✓</div>
+                    <h2 class="empty-title">Booking Confirmed!</h2>
+                    <p class="empty-subtitle">Your meeting has been successfully scheduled</p>
+                    
+                    <div class="booking-details">
+                        <div id="confirmationDetails"></div>
+                    </div>
 
-                <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button onclick="window.location.reload()" class="px-8 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition">
-                        Book Another Meeting
-                    </button>
-                    <a href="https://schedulesync-production.up.railway.app" class="inline-block px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition border-2 border-white">
-                        Done
-                    </a>
+                    <p class="empty-subtitle" style="margin-bottom: 2rem;">
+                        A confirmation email has been sent to your inbox with the meeting details.
+                    </p>
+
+                    <div style="display: flex; gap: 1rem; justify-content: center; max-width: 400px; margin: 0 auto;">
+                        <button class="btn btn-secondary" onclick="window.location.reload()">Book Another</button>
+                        <button class="btn btn-primary" onclick="window.location.href='/'">Done</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="hidden fixed bottom-4 right-4 glass px-6 py-4 rounded-lg shadow-lg z-50">
-        <p id="toastMessage"></p>
     </div>
 
     <script>
@@ -210,31 +618,32 @@
         let teamData = null;
         let currentMonth = new Date();
 
-        // Get team ID from URL path (e.g., /book/6 -> 6)
+        // Get team ID from URL
         const pathParts = window.location.pathname.split('/');
         const teamId = pathParts[pathParts.length - 1];
-        
-        console.log('Team ID from URL:', teamId);
 
         // Load team info
         async function loadTeam() {
             try {
-                console.log('Fetching team:', `/api/teams/${teamId}/public`);
                 const response = await fetch(`/api/teams/${teamId}/public`);
                 if (response.ok) {
-                    teamData = await response.json();
-                    console.log('Team loaded:', teamData);
+                    const data = await response.json();
+                    teamData = data.team; // Extract team from response
                     document.getElementById('teamName').textContent = teamData.name;
                     document.getElementById('teamDescription').textContent = teamData.description || 'Select a date and time to book a meeting';
+                    
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('mainContent').classList.remove('hidden');
                 } else {
-                    console.error('Team not found:', response.status);
-                    document.getElementById('teamName').textContent = 'Team Not Found';
-                    document.getElementById('teamDescription').textContent = 'This booking link may be invalid';
-                    showToast('Team not found. Please check your booking link.');
+                    throw new Error('Team not found');
                 }
             } catch (error) {
                 console.error('Error loading team:', error);
-                showToast('Error loading team information');
+                document.getElementById('loading').innerHTML = `
+                    <div class="error-message">
+                        Error loading team information. Please check your booking link.
+                    </div>
+                `;
             }
         }
 
@@ -256,7 +665,9 @@
 
             // Empty cells before first day
             for (let i = 0; i < firstDay; i++) {
-                container.innerHTML += '<div></div>';
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day empty';
+                container.appendChild(emptyDay);
             }
 
             // Days of the month
@@ -265,16 +676,18 @@
                 const isPast = date < today;
                 const dateStr = date.toISOString().split('T')[0];
 
-                container.innerHTML += `
-                    <div onclick="${isPast ? '' : `selectDate('${dateStr}')`}" 
-                         class="calendar-day ${isPast ? 'disabled' : ''} p-4 bg-white bg-opacity-20 rounded-lg text-center font-semibold">
-                        ${day}
-                    </div>
-                `;
+                const dayEl = document.createElement('div');
+                dayEl.className = `calendar-day ${isPast ? 'disabled' : ''}`;
+                dayEl.textContent = day;
+                
+                if (!isPast) {
+                    dayEl.onclick = () => selectDate(dateStr);
+                }
+                
+                container.appendChild(dayEl);
             }
         }
 
-        // Calendar navigation
         function previousMonth() {
             currentMonth.setMonth(currentMonth.getMonth() - 1);
             generateCalendar();
@@ -285,18 +698,16 @@
             generateCalendar();
         }
 
-        // Select date
         function selectDate(dateStr) {
             selectedDate = dateStr;
             const date = new Date(dateStr);
-            document.getElementById('selectedDate').textContent = 
+            document.getElementById('selectedDateDisplay').textContent = 
                 date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             
             generateTimeSlots();
             goToStep(2);
         }
 
-        // Generate time slots
         function generateTimeSlots() {
             const container = document.getElementById('timeSlots');
             const slots = [];
@@ -310,72 +721,68 @@
             }
 
             container.innerHTML = slots.map(time => `
-                <button onclick="selectTime('${time}')" 
-                        class="time-slot-btn px-4 py-3 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 font-semibold">
-                    ${time}
-                </button>
+                <div class="time-slot" onclick="selectTime('${time}')">${time}</div>
             `).join('');
         }
 
-        // Select time
         function selectTime(time) {
             selectedTime = time;
             
-            // Update all time slot buttons
-            document.querySelectorAll('.time-slot-btn').forEach(btn => {
-                btn.classList.remove('selected');
+            document.querySelectorAll('.time-slot').forEach(slot => {
+                slot.classList.remove('selected');
             });
             event.target.classList.add('selected');
 
-            // Update booking summary
+            // Update summary
             const date = new Date(selectedDate);
             document.getElementById('bookingSummary').innerHTML = `
-                <strong>Date:</strong> ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br>
-                <strong>Time:</strong> ${selectedTime}<br>
-                <strong>Duration:</strong> 30 minutes
+                <div class="detail-row">
+                    <span class="detail-label">Date:</span>
+                    <span class="detail-value">${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Time:</span>
+                    <span class="detail-value">${selectedTime}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Duration:</span>
+                    <span class="detail-value">30 minutes</span>
+                </div>
             `;
 
             setTimeout(() => goToStep(3), 500);
         }
 
-        // Navigate steps
         function goToStep(step) {
             currentStep = step;
             
             // Hide all steps
             for (let i = 1; i <= 4; i++) {
                 document.getElementById(`step${i}`).classList.add('hidden');
-                document.getElementById(`step${i}Indicator`)?.classList.add('opacity-50');
+                document.getElementById(`step${i}Tab`)?.classList.remove('active');
             }
             
             // Show current step
             document.getElementById(`step${step}`).classList.remove('hidden');
-            document.getElementById(`step${step}Indicator`)?.classList.remove('opacity-50');
+            document.getElementById(`step${step}Tab`)?.classList.add('active');
         }
 
-        // Submit booking
         async function submitBooking(event) {
             event.preventDefault();
 
-            // Validate team data is loaded
             if (!teamData || !teamData.id) {
-                showToast('Team information not loaded. Please refresh the page.');
-                console.error('teamData not available:', teamData);
+                alert('Team information not loaded. Please refresh the page.');
                 return;
             }
 
-            console.log('Submitting booking for team:', teamData.id);
-
             const bookingData = {
-                team_id: teamData.id, // Use the numeric ID from teamData
-                date: selectedDate,
-                time: selectedTime,
-                guest_name: document.getElementById('guestName').value,
-                guest_email: document.getElementById('guestEmail').value,
-                guest_notes: document.getElementById('guestNotes').value
+                teamId: teamData.id,
+                guestName: document.getElementById('guestName').value,
+                guestEmail: document.getElementById('guestEmail').value,
+                guestNotes: document.getElementById('guestNotes').value,
+                bookingDate: selectedDate,
+                bookingTime: selectedTime
             };
-
-            console.log('Booking data:', bookingData);
 
             try {
                 const response = await fetch('/api/bookings', {
@@ -385,39 +792,42 @@
                 });
 
                 if (response.ok) {
-                    const result = await response.json();
-                    console.log('Booking created:', result);
                     showConfirmation(bookingData);
                 } else {
                     const error = await response.json();
-                    console.error('Booking failed:', error);
-                    showToast('Failed to create booking. Please try again.');
+                    alert('Failed to create booking: ' + (error.error || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error creating booking:', error);
-                showToast('Failed to create booking. Please try again.');
+                console.error('Error:', error);
+                alert('Failed to create booking. Please try again.');
             }
         }
 
-        // Show confirmation
         function showConfirmation(data) {
-            const date = new Date(data.date);
+            const date = new Date(data.bookingDate);
             document.getElementById('confirmationDetails').innerHTML = `
-                <div><strong>Team:</strong> ${teamData.name}</div>
-                <div><strong>Date:</strong> ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                <div><strong>Time:</strong> ${data.time}</div>
-                <div><strong>Name:</strong> ${data.guest_name}</div>
-                <div><strong>Email:</strong> ${data.guest_email}</div>
+                <div class="detail-row">
+                    <span class="detail-label">Team:</span>
+                    <span class="detail-value">${teamData.name}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Date:</span>
+                    <span class="detail-value">${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Time:</span>
+                    <span class="detail-value">${data.bookingTime}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Name:</span>
+                    <span class="detail-value">${data.guestName}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Email:</span>
+                    <span class="detail-value">${data.guestEmail}</span>
+                </div>
             `;
             goToStep(4);
-        }
-
-        // Show toast
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMessage').textContent = message;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
         }
 
         // Initialize

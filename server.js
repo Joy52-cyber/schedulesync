@@ -666,6 +666,39 @@ app.get('/api/teams', authenticateToken, async (req, res) => {
   }
 });
 
+// Get public team info (for booking page - must be BEFORE /api/teams/:id)
+app.get('/api/teams/:id/public', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Try to parse as integer, if it fails, it's a public_url string
+    const isNumeric = /^\d+$/.test(id);
+    
+    let result;
+    if (isNumeric) {
+      // Search by ID
+      result = await pool.query(
+        'SELECT id, name, description FROM teams WHERE id = $1',
+        [parseInt(id)]
+      );
+    } else {
+      // Search by public_url
+      result = await pool.query(
+        'SELECT id, name, description FROM teams WHERE public_url = $1',
+        [id]
+      );
+    }
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json({ team: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching public team:', error);
+    res.status(500).json({ error: 'Failed to fetch team' });
+  }
+});
+
 // Get single team by ID
 app.get('/api/teams/:id', authenticateToken, async (req, res) => {
   try {
@@ -950,37 +983,6 @@ app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
 });
 
 // Get public team info (no auth required)
-app.get('/api/teams/:id/public', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Try to parse as integer, if it fails, it's a public_url string
-    const isNumeric = /^\d+$/.test(id);
-    
-    let result;
-    if (isNumeric) {
-      // Search by ID
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE id = $1',
-        [parseInt(id)]
-      );
-    } else {
-      // Search by public_url
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE public_url = $1',
-        [id]
-      );
-    }
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error fetching public team:', error);
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
 
 /* ============================================================================
    BOOKINGS API ENDPOINTS
