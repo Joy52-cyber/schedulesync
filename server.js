@@ -92,6 +92,44 @@ async function initDatabase() {
       booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
+  
+  // Add Google OAuth columns if table already exists
+  try {
+    await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`);
+  } catch (e) { /* Already nullable */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_calendar_id VARCHAR(255)`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC'`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb`);
+  } catch (e) { /* Already exists */ }
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teams (
       id SERIAL PRIMARY KEY,
@@ -135,6 +173,16 @@ async function initDatabase() {
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
+  
+  // Add columns to bookings if table already exists
+  try {
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meet_link TEXT`);
+  } catch (e) { /* Already exists */ }
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS calendar_connections (
       id SERIAL PRIMARY KEY,
@@ -153,6 +201,8 @@ async function initDatabase() {
   
   // Create index on google_id
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
+  
+  console.log('✅ Database schema migrated');
 }
 
 async function ensureTestUser() {
