@@ -834,7 +834,8 @@ app.get('/api/teams/:id/public', async (req, res) => {
    ========================================================================== */
 
 // Create booking (public - no auth required)
-app.post('/api/bookings', async (req, res) => {
+// Public booking submission (supports both routes)
+async function handleBookingSubmission(req, res) {
   try {
     let { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
     
@@ -898,10 +899,15 @@ app.post('/api/bookings', async (req, res) => {
     res.status(201).json({ booking: result.rows[0], emailSent: !!emailService });
   } catch (error) {
     console.error('Error creating booking:', error);
-    console.error('Error details:', error.message);
-    res.status(500).json({ error: 'Failed to create booking', details: error.message });
+    res.status(500).json({ error: error.message });
   }
-});
+}
+
+// Support both old and new booking endpoints
+app.post('/api/bookings', handleBookingSubmission);
+app.post('/api/teams/bookings/public', handleBookingSubmission);
+
+/* ------------------------- Get Team Bookings -------------------------- */
 
 // Get all bookings for user
 app.get('/api/bookings', authenticateToken, async (req, res) => {
@@ -938,25 +944,6 @@ app.get('/api/calendar/connections', async (req, res) => {
   );
   res.json({ connections: out.rows });
 });
-
-// -----------------------------------------------------------------------------
-// Google OAuth Callback
-// -----------------------------------------------------------------------------
-app.get('/api/calendar/google/callback', async (req, res) => {
-  try {
-    const { code } = req.query;
-    console.log('✅ Google OAuth callback received with code:', code);
-
-    // TODO: In the future, exchange this `code` for tokens via Google's OAuth endpoint.
-    // For now, we’ll just confirm success visually.
-    const redirectUrl = `${process.env.APP_URL || 'https://schedulesync-production.up.railway.app'}/dashboard?success=google_connected`;
-    res.redirect(redirectUrl);
-  } catch (error) {
-    console.error('❌ Error handling Google callback:', error);
-    res.status(500).send('Google authentication failed.');
-  }
-});
-
 
 /* -------------------------- Google OAuth: Auth URL ------------------------ */
 app.get('/api/calendar/google/auth', (req, res) => {
@@ -1041,6 +1028,8 @@ app.get('/api/config/status', (_req, res) => {
 /* ------------------------------- Static Pages ----------------------------- */
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/signup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
+app.get('/register', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/booking', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
 app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-management.html')));
