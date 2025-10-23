@@ -1,8 +1,9 @@
 ﻿// server.js
 require('dotenv').config();
 
-// Debug: Show DATABASE_URL being used
-console.log('🔍 DATABASE_URL:', process.env.DATABASE_URL);
+// Debug: Show database connection string being used
+const dbUrl = process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL;
+console.log('🔍 DB Connection:', dbUrl?.substring(0, 80) + '...');
 
 // Google Auth service (optional - gracefully handles if not configured)
 let googleAuth = null;
@@ -37,9 +38,9 @@ const clean = (v) => (v || '').trim();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = clean(process.env.JWT_SECRET) || 'schedulesync-secret-2025';
 
-// Database
+// Database - Use DB_CONNECTION_STRING (to bypass Railway auto-injection) or fallback to DATABASE_URL
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
