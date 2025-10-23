@@ -115,7 +115,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS bookings (
       id SERIAL PRIMARY KEY,
       team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-      slot_id INTEGER NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+      slot_id INTEGER REFERENCES time_slots(id) ON DELETE SET NULL,
       guest_name VARCHAR(255) NOT NULL,
       guest_email VARCHAR(255) NOT NULL,
       guest_notes TEXT,
@@ -366,21 +366,68 @@ app.get('/api/teams/:id/members', authenticateToken, async (req, res) => {
 app.post('/api/teams/:id/members', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { email } = req.body;
+    const { email, sendInvite } = req.body;
+    const currentUserId = req.userId;
+    
+    // Get team info
+    const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [id]);
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const team = teamResult.rows[0];
+    
+    // Get inviter info
+    const inviterResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [currentUserId]);
+    const inviter = inviterResult.rows[0];
+    
+    // Check if user exists
     const userResult = await pool.query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id, name FROM users WHERE email = $1',
       [email]
     );
+    
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      // User doesn't exist - send invitation email
+      if (emailService && sendInvite !== false) {
+        await emailService.sendTeamInvitation(
+          email,
+          email.split('@')[0], // Use email prefix as name
+          team.name,
+          inviter.name,
+          team.id
+        ).catch(err => console.error('Email error:', err));
+      }
+      return res.status(404).json({ 
+        error: 'User not found',
+        invitationSent: !!emailService && sendInvite !== false,
+        message: 'Invitation email sent to user'
+      });
     }
+    
     const userId = userResult.rows[0].id;
+    const userName = userResult.rows[0].name;
+    
+    // Add to team
     const result = await pool.query(
       `INSERT INTO team_members (team_id, user_id, role)
        VALUES ($1, $2, $3) RETURNING *`,
       [id, userId, 'member']
     );
-    res.status(201).json({ member: result.rows[0] });
+    
+    // Send welcome email
+    if (emailService && sendInvite !== false) {
+      await emailService.sendTeamWelcome(
+        email,
+        userName,
+        team.name,
+        inviter.name
+      ).catch(err => console.error('Email error:', err));
+    }
+    
+    res.status(201).json({ 
+      member: result.rows[0],
+      emailSent: !!emailService && sendInvite !== false
+    });
   } catch (error) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'User already in team' });
@@ -465,6 +512,8 @@ app.post('/api/bookings', async (req, res) => {
   try {
     const { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
     
+    console.log('Creating booking:', { team_id, date, time, guest_name, guest_email });
+    
     // Get team info
     const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [team_id]);
     if (teamResult.rows.length === 0) {
@@ -472,14 +521,16 @@ app.post('/api/bookings', async (req, res) => {
     }
     const team = teamResult.rows[0];
     
-    // Create booking
+    // Create booking without slot_id (make it nullable or use a default)
     const result = await pool.query(
       `INSERT INTO bookings (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time)
-       VALUES ($1, 1, $2, $3, $4, 'confirmed', $5, $6) RETURNING *`,
+       VALUES ($1, NULL, $2, $3, $4, 'confirmed', $5, $6) RETURNING *`,
       [team_id, guest_name, guest_email, guest_notes || '', date, time]
     );
     
     const booking = result.rows[0];
+    
+    console.log('Booking created:', booking.id);
     
     // Send emails if service is available
     if (emailService) {
@@ -498,7 +549,8 @@ app.post('/api/bookings', async (req, res) => {
     res.status(201).json({ booking: result.rows[0], emailSent: !!emailService });
   } catch (error) {
     console.error('Error creating booking:', error);
-    res.status(500).json({ error: 'Failed to create booking' });
+    console.error('Error details:', error.message);
+    res.status(500).json({ error: 'Failed to create booking', details: error.message });
   }
 });
 
