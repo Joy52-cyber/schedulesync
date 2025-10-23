@@ -161,10 +161,13 @@ async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS time_slots (
       id SERIAL PRIMARY KEY,
-      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      slot_start TIMESTAMP NOT NULL,
-      slot_end TIMESTAMP NOT NULL,
+      slot_start TIMESTAMP,
+      slot_end TIMESTAMP,
+      day_of_week INTEGER,
+      start_time TIME,
+      end_time TIME,
       is_available BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
@@ -192,6 +195,35 @@ async function initDatabase() {
   try {
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meet_link TEXT`);
   } catch (e) { /* Already exists */ }
+  
+  // Add new columns to time_slots for weekly availability
+  try {
+    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS day_of_week INTEGER`);
+    console.log('✅ Added day_of_week column');
+  } catch (e) { 
+    if (e.code !== '42701') console.log('⚠️  day_of_week column issue:', e.message);
+  }
+  try {
+    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS start_time TIME`);
+    console.log('✅ Added start_time column');
+  } catch (e) { 
+    if (e.code !== '42701') console.log('⚠️  start_time column issue:', e.message);
+  }
+  try {
+    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS end_time TIME`);
+    console.log('✅ Added end_time column');
+  } catch (e) { 
+    if (e.code !== '42701') console.log('⚠️  end_time column issue:', e.message);
+  }
+  try {
+    await pool.query(`ALTER TABLE time_slots ALTER COLUMN team_id DROP NOT NULL`);
+  } catch (e) { /* Already nullable */ }
+  try {
+    await pool.query(`ALTER TABLE time_slots ALTER COLUMN slot_start DROP NOT NULL`);
+  } catch (e) { /* Already nullable */ }
+  try {
+    await pool.query(`ALTER TABLE time_slots ALTER COLUMN slot_end DROP NOT NULL`);
+  } catch (e) { /* Already nullable */ }
   
   await pool.query(`
     CREATE TABLE IF NOT EXISTS calendar_connections (
@@ -1218,6 +1250,58 @@ app.get('/api/debug/oauth', (req, res) => {
       }
     })()
   });
+});
+
+// Manual migration endpoint for time_slots
+app.get('/api/migrate/fix-timeslots', async (req, res) => {
+  try {
+    const results = [];
+    
+    // Check current schema
+    const checkQuery = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'time_slots'
+      ORDER BY ordinal_position
+    `);
+    results.push({ current_columns: checkQuery.rows });
+    
+    // Add missing columns
+    try {
+      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS day_of_week INTEGER`);
+      results.push({ added: 'day_of_week' });
+    } catch (e) {
+      results.push({ day_of_week: 'already exists or error: ' + e.message });
+    }
+    
+    try {
+      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS start_time TIME`);
+      results.push({ added: 'start_time' });
+    } catch (e) {
+      results.push({ start_time: 'already exists or error: ' + e.message });
+    }
+    
+    try {
+      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS end_time TIME`);
+      results.push({ added: 'end_time' });
+    } catch (e) {
+      results.push({ end_time: 'already exists or error: ' + e.message });
+    }
+    
+    // Check schema after migration
+    const afterQuery = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'time_slots'
+      ORDER BY ordinal_position
+    `);
+    results.push({ updated_columns: afterQuery.rows });
+    
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message, details: error });
+  }
 });
 
 /* --------------------------- Database Migrations -------------------------- */
