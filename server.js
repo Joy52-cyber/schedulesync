@@ -1001,6 +1001,55 @@ async function handleBookingSubmission(req, res) {
 app.post('/api/bookings', handleBookingSubmission);
 app.post('/api/teams/bookings/public', handleBookingSubmission);
 
+/* ----------------------- Availability Management ----------------------- */
+
+// Save user/team availability
+app.post('/api/availability', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { slots, team_id } = req.body;
+
+    // Delete existing slots for this user/team
+    if (team_id) {
+      await pool.query('DELETE FROM time_slots WHERE team_id = $1', [team_id]);
+    } else {
+      await pool.query('DELETE FROM time_slots WHERE user_id = $1', [userId]);
+    }
+
+    // Insert new slots
+    if (slots && slots.length > 0) {
+      const insertPromises = slots.map(slot => 
+        pool.query(
+          `INSERT INTO time_slots (team_id, user_id, day_of_week, start_time, end_time, is_available)
+           VALUES ($1, $2, $3, $4, $5, true)`,
+          [team_id || null, userId, slot.day_of_week, slot.start_time, slot.end_time]
+        )
+      );
+      await Promise.all(insertPromises);
+    }
+
+    res.json({ success: true, message: 'Availability saved' });
+  } catch (error) {
+    console.error('Error saving availability:', error);
+    res.status(500).json({ error: 'Failed to save availability' });
+  }
+});
+
+// Get user availability
+app.get('/api/availability', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      'SELECT * FROM time_slots WHERE user_id = $1 ORDER BY day_of_week, start_time',
+      [userId]
+    );
+    res.json({ slots: result.rows });
+  } catch (error) {
+    console.error('Error fetching availability:', error);
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
 /* ------------------------- Get Team Bookings -------------------------- */
 
 // Get all bookings for user
