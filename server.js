@@ -163,13 +163,16 @@ function authenticateToken(req, res, next) {
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
+  }
+}
 
-    /* --------------------------- Time Parsing Helper --------------------------- */
-// Returns 'YYYY-MM-DD HH:MM:SS' for Postgres TIMESTAMP WITHOUT TIME ZONE
+/* --------------------------- Time Parsing Helper --------------------------- */
+// Returns { start: 'YYYY-MM-DD HH:MM:SS', end: 'YYYY-MM-DD HH:MM:SS' } for a 60-minute slot,
+// or null if date/time are invalid. Uses UTC math and formats without timezone for Postgres TIMESTAMP.
 function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
 
-  // Expecting timeStr like "4:30 PM" or "09:00 AM"
+  // Expect "4:30 PM", "09:00 AM", etc.
   const parts = String(timeStr).trim().split(/\s+/);
   if (parts.length < 2) return null;
 
@@ -187,11 +190,10 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   const hh = String(h).padStart(2, '0');
   const mm = String(m).padStart(2, '0');
 
-  // Build a Date in UTC for safe +60m math, then format without timezone.
+  // Build a UTC date for safe +60m increment
   const d = new Date(`${dateStr}T${hh}:${mm}:00Z`);
   if (isNaN(d.getTime())) return null;
 
-  // Helper to format Date -> 'YYYY-MM-DD HH:MM:SS' in UTC
   const toTS = (dt) => {
     const yyyy = dt.getUTCFullYear();
     const mo   = String(dt.getUTCMonth() + 1).padStart(2, '0');
@@ -202,14 +204,10 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
     return `${yyyy}-${mo}-${dd} ${HH}:${MM}:${SS}`;
   };
 
-  const start = d;                          // start at parsed time
+  const start = d;
   const end   = new Date(d.getTime() + 60 * 60000); // +60 minutes
 
   return { start: toTS(start), end: toTS(end) };
-}
-
-
-  }
 }
 
 /* ----------------------------- Config Guards ------------------------------ */
@@ -580,24 +578,27 @@ app.post('/api/bookings', async (req, res) => {
     const numericTeamId = team.id; // Use the numeric ID from the database
     
     console.log('Found team:', { id: team.id, name: team.name });
+
+    // ────────────────────────── Option B: compute timestamps ──────────────────────────
+    const ts = parseDateAndTimeToTimestamp(date, time);
+    if (!ts || !ts.start || !ts.end) {
+      return res.status(400).json({ error: 'Invalid date/time format' });
+    }
     
-    // Create booking with the numeric team ID
-   // Compute slot_start / slot_end from date + time (60-minute window)
-const ts = parseDateAndTimeToTimestamp(date, time);
-if (!ts || !ts.start || !ts.end) {
-  return res.status(400).json({ error: 'Invalid date/time format' });
-}
-
-// Create booking with the numeric team ID and timestamps
-const result = await pool.query(
-  `INSERT INTO bookings 
-     (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time, slot_start, slot_end)
-   VALUES 
-     ($1,     NULL,     $2,         $3,          $4,          'confirmed', $5,          $6,          $7,         $8)
-   RETURNING *`,
-  [numericTeamId, guest_name, guest_email, guest_notes || '', date, time, ts.start, ts.end]
-);
-
+    // Create booking with the numeric team ID and slot timestamps
+    const result = await pool.query(
+      `INSERT INTO bookings 
+         (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time, slot_start, slot_end)
+       VALUES 
+         ($1,     NULL,     $2,         $3,          $4,          'confirmed', $5,          $6,          $7,         $8)
+       RETURNING *`,
+      [numericTeamId, guest_name, guest_email, guest_notes || '', date, time, ts.start, ts.end]
+    );
+    
+    const booking = result.rows[0];
+    
+    console.log('Booking created:', booking.id);
+    
     // Send emails if service is available
     if (emailService) {
       // Send confirmation to guest
