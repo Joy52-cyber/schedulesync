@@ -622,26 +622,57 @@
         const pathParts = window.location.pathname.split('/');
         const teamId = pathParts[pathParts.length - 1];
 
+        console.log('📍 Team ID from URL:', teamId);
+        console.log('📍 Full URL path:', window.location.pathname);
+
         // Load team info
         async function loadTeam() {
             try {
-                const response = await fetch(`/api/teams/${teamId}/public`);
+                const apiUrl = `/api/teams/${teamId}/public`;
+                console.log('🔍 Fetching team from:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                console.log('📡 Response status:', response.status, response.statusText);
+                
+                const data = await response.json();
+                console.log('📦 Response data:', data);
+                
                 if (response.ok) {
-                    const data = await response.json();
-                    teamData = data.team; // Extract team from response
+                    // Handle both response formats
+                    if (data.team) {
+                        teamData = data.team;
+                        console.log('✅ Team data extracted from data.team:', teamData);
+                    } else if (data.id) {
+                        teamData = data;
+                        console.log('✅ Team data used directly:', teamData);
+                    } else {
+                        throw new Error('Invalid response format - no team data found');
+                    }
+                    
+                    console.log('✅ Final teamData:', teamData);
+                    console.log('✅ Team ID:', teamData.id);
+                    console.log('✅ Team Name:', teamData.name);
+                    
                     document.getElementById('teamName').textContent = teamData.name;
                     document.getElementById('teamDescription').textContent = teamData.description || 'Select a date and time to book a meeting';
                     
                     document.getElementById('loading').classList.add('hidden');
                     document.getElementById('mainContent').classList.remove('hidden');
                 } else {
-                    throw new Error('Team not found');
+                    throw new Error(data.error || 'Team not found');
                 }
             } catch (error) {
-                console.error('Error loading team:', error);
+                console.error('❌ Error loading team:', error);
                 document.getElementById('loading').innerHTML = `
                     <div class="error-message">
-                        Error loading team information. Please check your booking link.
+                        <strong>Error loading team information</strong><br><br>
+                        ${error.message}<br><br>
+                        <small>Team ID: ${teamId}</small><br>
+                        <small>URL: /api/teams/${teamId}/public</small><br><br>
+                        Please check:<br>
+                        1. Has server-fixed.js been deployed?<br>
+                        2. Is the public route before the general route?<br>
+                        3. Does the team exist in the database?
                     </div>
                 `;
             }
@@ -770,8 +801,13 @@
         async function submitBooking(event) {
             event.preventDefault();
 
+            console.log('📝 Submitting booking...');
+            console.log('📝 teamData:', teamData);
+            console.log('📝 teamData.id:', teamData?.id);
+
             if (!teamData || !teamData.id) {
                 alert('Team information not loaded. Please refresh the page.');
+                console.error('❌ teamData is invalid:', teamData);
                 return;
             }
 
@@ -784,6 +820,8 @@
                 bookingTime: selectedTime
             };
 
+            console.log('📤 Booking data being sent:', bookingData);
+
             try {
                 const response = await fetch('/api/bookings', {
                     method: 'POST',
@@ -791,15 +829,19 @@
                     body: JSON.stringify(bookingData)
                 });
 
+                console.log('📡 Booking response status:', response.status);
+                
+                const result = await response.json();
+                console.log('📦 Booking response data:', result);
+
                 if (response.ok) {
                     showConfirmation(bookingData);
                 } else {
-                    const error = await response.json();
-                    alert('Failed to create booking: ' + (error.error || 'Unknown error'));
+                    throw new Error(result.error || 'Failed to create booking');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to create booking. Please try again.');
+                console.error('❌ Booking error:', error);
+                alert('Failed to create booking: ' + error.message);
             }
         }
 
@@ -831,6 +873,7 @@
         }
 
         // Initialize
+        console.log('🚀 Initializing booking page...');
         loadTeam();
         generateCalendar();
     </script>
