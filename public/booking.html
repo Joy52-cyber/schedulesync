@@ -1,211 +1,452 @@
-﻿<script>
-  let currentStep = 1;
-  let selectedDate = null;
-  let selectedTime = null;
-  let teamData = null;
-  let currentMonth = new Date();
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookings - ScheduleSync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  // --- Resolve team id/slug safely ---
-  function resolveTeamId() {
-    const q = new URLSearchParams(location.search);
-    if (q.get('team')) return decodeURIComponent(q.get('team'));
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+        }
 
-    // support pretty links like /book/<id-or-slug>
-    const segs = location.pathname.split('/').filter(Boolean);
-    if (segs.length >= 2 && segs[0] === 'book') return decodeURIComponent(segs[1]);
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
 
-    // NO team on generic /booking.html or /bookings → return null (don't call public endpoint)
-    return null;
-  }
-  const teamId = resolveTeamId();
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
 
-  // UI helpers
-  function showToast(message) {
-    const toast = document.getElementById('toast');
-    document.getElementById('toastMessage').textContent = message;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 3000);
-  }
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
 
-  // ---------------- Load team info (only when we have a team id/slug) ----------------
-  async function loadTeam() {
-    if (!teamId) {
-      document.getElementById('teamName').textContent = 'Schedule a Meeting';
-      document.getElementById('teamDescription').textContent =
-        'Tip: open this page via /book/<teamId-or-slug> or add ?team=<teamId-or-slug>';
-      return; // do NOT call /api/teams/:id/public
-    }
-    try {
-      const resp = await fetch(`/api/teams/${encodeURIComponent(teamId)}/public`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      teamData = await resp.json(); // { id, name, description }
-      document.getElementById('teamName').textContent = teamData.name || 'Team';
-      document.getElementById('teamDescription').textContent =
-        teamData.description || 'Select a date and time to book a meeting';
+        .nav-links a {
+            color: #64748b;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
 
-      // Keep numeric id for submit even if URL used a slug
-      const formEl = document.getElementById('bookingForm');
-      if (teamData.id && formEl) formEl.dataset.numericTeamId = String(teamData.id);
-    } catch (e) {
-      console.error('Error loading team:', e);
-      document.getElementById('teamName').textContent = 'Team Not Found';
-      document.getElementById('teamDescription').textContent =
-        'This booking link may be invalid.';
-      // still allow picking date/time, but submit will guard
-    }
-  }
+        .nav-links a:hover, .nav-links a.active {
+            color: #667eea;
+        }
 
-  // ---------------- Calendar + time UI (unchanged) ----------------
-  function generateCalendar() {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-    document.getElementById('currentMonth').textContent =
-      currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
 
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date(); today.setHours(0,0,0,0);
+        .logout-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            color: #334155;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-    const container = document.getElementById('calendarDays');
-    container.innerHTML = '';
+        .logout-btn:hover {
+            background: #e2e8f0;
+        }
 
-    for (let i = 0; i < firstDay; i++) container.innerHTML += '<div></div>';
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const isPast = date < today;
-      const dateStr = date.toISOString().split('T')[0];
-      container.innerHTML += `
-        <div onclick="${isPast ? '' : `selectDate('${dateStr}')`}"
-             class="calendar-day ${isPast ? 'disabled' : ''} p-4 bg-white bg-opacity-20 rounded-lg text-center font-semibold">
-          ${day}
-        </div>`;
-    }
-  }
-  function previousMonth(){ currentMonth.setMonth(currentMonth.getMonth()-1); generateCalendar(); }
-  function nextMonth(){ currentMonth.setMonth(currentMonth.getMonth()+1); generateCalendar(); }
+        .page-header {
+            margin-bottom: 32px;
+        }
 
-  function selectDate(dateStr) {
-    selectedDate = dateStr;
-    const date = new Date(dateStr);
-    document.getElementById('selectedDate').textContent =
-      date.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    generateTimeSlots();
-    goToStep(2);
-  }
+        .page-header h1 {
+            font-size: 32px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
 
-  function generateTimeSlots() {
-    const container = document.getElementById('timeSlots');
-    const slots = [];
-    for (let hour = 9; hour <= 17; hour++) {
-      slots.push(`${hour % 12 || 12}:00 ${hour < 12 ? 'AM' : 'PM'}`);
-      if (hour < 17) slots.push(`${hour % 12 || 12}:30 ${hour < 12 ? 'AM' : 'PM'}`);
-    }
-    container.innerHTML = slots.map(time => `
-      <button onclick="selectTime('${time}')"
-              class="time-slot-btn px-4 py-3 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 font-semibold">
-        ${time}
-      </button>`).join('');
-  }
+        .page-header p {
+            color: #64748b;
+        }
 
-  function selectTime(time) {
-    selectedTime = time;
-    document.querySelectorAll('.time-slot-btn').forEach(btn => btn.classList.remove('selected'));
-    event.target.classList.add('selected');
+        .filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
 
-    const date = new Date(selectedDate);
-    document.getElementById('bookingSummary').innerHTML = `
-      <strong>Date:</strong> ${date.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}<br>
-      <strong>Time:</strong> ${selectedTime}<br>
-      <strong>Duration:</strong> 30 minutes`;
-    setTimeout(() => goToStep(3), 500);
-  }
+        .filter-btn {
+            padding: 8px 16px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            color: #334155;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-  function goToStep(step) {
-    currentStep = step;
-    for (let i = 1; i <= 4; i++) {
-      document.getElementById(`step${i}`).classList.add('hidden');
-      document.getElementById(`step${i}Indicator`)?.classList.add('opacity-50');
-    }
-    document.getElementById(`step${step}`).classList.remove('hidden');
-    document.getElementById(`step${step}Indicator`)?.classList.remove('opacity-50');
-  }
+        .filter-btn:hover {
+            border-color: #667eea;
+        }
 
-  // ---------------- Submit booking (robust) ----------------
-  async function submitBooking(ev) {
-    ev.preventDefault();
+        .filter-btn.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
 
-    // prefer numeric id saved from public fetch, else fallback to URL id/slug
-    const formEl = ev.currentTarget;
-    const numericId = formEl.dataset.numericTeamId;
-    const resolvedTeam = numericId || teamId;
+        .bookings-list {
+            display: grid;
+            gap: 16px;
+        }
 
-    if (!resolvedTeam) {
-      showToast('No team specified. Open via /book/<teamId-or-slug> or add ?team=<id-or-slug>.');
-      return;
-    }
-    if (!selectedDate || !selectedTime) {
-      showToast('Please select a date and time first.');
-      return;
-    }
+        .booking-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+        }
 
-    const payload = {
-      team_id: resolvedTeam, // server accepts numeric id OR public_url slug
-      date: selectedDate,
-      time: selectedTime,
-      guest_name: document.getElementById('guestName').value.trim(),
-      guest_email: document.getElementById('guestEmail').value.trim(),
-      guest_notes: document.getElementById('guestNotes').value.trim() || ''
-    };
+        .booking-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
 
-    if (!payload.guest_name || !payload.guest_email) {
-      showToast('Please complete name and email.');
-      return;
-    }
+        .booking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
 
-    try {
-      const resp = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await resp.json().catch(() => ({}));
+        .booking-info h3 {
+            font-size: 18px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
 
-      if (!resp.ok) {
-        console.error('Booking failed:', resp.status, data);
-        showToast(data?.error || 'Failed to create booking. Please try again.');
-        return;
-      }
+        .booking-details {
+            display: flex;
+            gap: 24px;
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
 
-      // Success — show confirmation
-      showConfirmation(payload);
-    } catch (e) {
-      console.error('Network error creating booking:', e);
-      showToast('Network error creating booking. Please try again.');
-    }
-  }
+        .detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
 
-  function showConfirmation(data) {
-    const date = new Date(data.date);
-    document.getElementById('confirmationDetails').innerHTML = `
-      <div><strong>Team:</strong> ${teamData?.name || '—'}</div>
-      <div><strong>Date:</strong> ${date.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</div>
-      <div><strong>Time:</strong> ${data.time}</div>
-      <div><strong>Name:</strong> ${data.guest_name}</div>
-      <div><strong>Email:</strong> ${data.guest_email}</div>`;
-    goToStep(4);
-  }
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
 
-  // ---------------- Init ----------------
-  loadTeam();       // will no-op (and not 404) if there is no teamId
-  generateCalendar();
+        .status-confirmed {
+            background: #d1fae5;
+            color: #065f46;
+        }
 
-  // expose submitBooking to inline onsubmit
-  window.submitBooking = submitBooking;
-  window.previousMonth = previousMonth;
-  window.nextMonth = nextMonth;
-  window.selectDate = selectDate;
-  window.selectTime = selectTime;
-  window.goToStep = goToStep;
-</script>
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-cancelled {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .booking-notes {
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            color: #64748b;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            color: #334155;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .booking-header {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .booking-details {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">📅 ScheduleSync</a>
+        <div class="nav-links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/teams">Teams</a>
+            <a href="/availability">Availability</a>
+            <a href="/bookings" class="active">Bookings</a>
+        </div>
+        <div class="user-menu">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>My Bookings</h1>
+            <p>View and manage all your scheduled meetings</p>
+        </div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterBookings('all')">All</button>
+            <button class="filter-btn" onclick="filterBookings('upcoming')">Upcoming</button>
+            <button class="filter-btn" onclick="filterBookings('past')">Past</button>
+            <button class="filter-btn" onclick="filterBookings('confirmed')">Confirmed</button>
+            <button class="filter-btn" onclick="filterBookings('pending')">Pending</button>
+        </div>
+
+        <div id="bookingsContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading bookings...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+        if (!token) window.location.href = '/login';
+
+        if (user.name) {
+            document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+        }
+
+        let allBookings = [];
+        let currentFilter = 'all';
+
+        async function loadBookings() {
+            try {
+                const response = await fetch('/api/bookings', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load bookings');
+
+                const data = await response.json();
+                allBookings = data.bookings || [];
+                displayBookings(allBookings);
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                document.getElementById('bookingsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <h3>Failed to load bookings</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayBookings(bookings) {
+            const container = document.getElementById('bookingsContainer');
+
+            if (!bookings || bookings.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No bookings yet</h3>
+                        <p>Your scheduled meetings will appear here</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="bookings-list">
+                    ${bookings.map(booking => `
+                        <div class="booking-card">
+                            <div class="booking-header">
+                                <div class="booking-info">
+                                    <h3>${escapeHtml(booking.guest_name)}</h3>
+                                    <div class="booking-details">
+                                        <div class="detail">
+                                            <span>📅</span>
+                                            <span>${formatDate(booking.booking_date)}</span>
+                                        </div>
+                                        <div class="detail">
+                                            <span>🕐</span>
+                                            <span>${booking.booking_time}</span>
+                                        </div>
+                                        <div class="detail">
+                                            <span>✉️</span>
+                                            <span>${escapeHtml(booking.guest_email)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span class="status-badge status-${booking.status}">
+                                    ${booking.status}
+                                </span>
+                            </div>
+                            ${booking.guest_notes ? `
+                                <div class="booking-notes">
+                                    <strong>Notes:</strong> ${escapeHtml(booking.guest_notes)}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function filterBookings(filter) {
+            currentFilter = filter;
+            
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Filter bookings
+            let filtered = allBookings;
+            const now = new Date();
+
+            switch(filter) {
+                case 'upcoming':
+                    filtered = allBookings.filter(b => new Date(b.booking_date) >= now);
+                    break;
+                case 'past':
+                    filtered = allBookings.filter(b => new Date(b.booking_date) < now);
+                    break;
+                case 'confirmed':
+                    filtered = allBookings.filter(b => b.status === 'confirmed');
+                    break;
+                case 'pending':
+                    filtered = allBookings.filter(b => b.status === 'pending');
+                    break;
+            }
+
+            displayBookings(filtered);
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        loadBookings();
+    </script>
+</body>
+</html>
