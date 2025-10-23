@@ -17,6 +17,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
+const path = require('path');
+console.log('🔍 DATABASE_URL being used:', process.env.DATABASE_URL?.substring(0, 80) + '...');
 
 // Email service (optional - gracefully handles if not configured)
 let emailService = null;
