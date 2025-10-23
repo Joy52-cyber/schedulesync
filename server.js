@@ -33,7 +33,7 @@ const pool = new Pool({
 // Google - Support both variable names
 const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_CLIENT_SECRET = clean(process.env.GOOGLE_CLIENT_SECRET);
-const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URI);
+const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL);
 
 // Microsoft
 const MICROSOFT_CLIENT_ID     = clean(process.env.MICROSOFT_CLIENT_ID);
@@ -1086,6 +1086,121 @@ app.get('/api/migrate/fix-slot-constraints', async (req, res) => {
       success: true, 
       migrations: migrations,
       message: 'Slot constraints fixed! Bookings should work now.'
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hint: 'Check Railway logs for details'
+    });
+  }
+});
+
+/* ======================= GOOGLE OAUTH MIGRATION ========================== */
+app.get('/api/migrate/add-google-oauth', async (req, res) => {
+  try {
+    const migrations = [];
+    
+    // Make password nullable
+    try {
+      await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`);
+      migrations.push('✅ Made password nullable');
+    } catch (e) {
+      migrations.push('⚠️ Password: ' + e.message);
+    }
+    
+    // Add google_id
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+      migrations.push('✅ Added google_id');
+    } catch (e) {
+      migrations.push('⚠️ google_id: ' + e.message);
+    }
+    
+    // Add google_access_token
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT`);
+      migrations.push('✅ Added google_access_token');
+    } catch (e) {
+      migrations.push('⚠️ google_access_token: ' + e.message);
+    }
+    
+    // Add google_refresh_token
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT`);
+      migrations.push('✅ Added google_refresh_token');
+    } catch (e) {
+      migrations.push('⚠️ google_refresh_token: ' + e.message);
+    }
+    
+    // Add default_calendar_id
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_calendar_id VARCHAR(255)`);
+      migrations.push('✅ Added default_calendar_id');
+    } catch (e) {
+      migrations.push('⚠️ default_calendar_id: ' + e.message);
+    }
+    
+    // Add profile_picture
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
+      migrations.push('✅ Added profile_picture');
+    } catch (e) {
+      migrations.push('⚠️ profile_picture: ' + e.message);
+    }
+    
+    // Add timezone
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC'`);
+      migrations.push('✅ Added timezone');
+    } catch (e) {
+      migrations.push('⚠️ timezone: ' + e.message);
+    }
+    
+    // Add working_hours
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb`);
+      migrations.push('✅ Added working_hours');
+    } catch (e) {
+      migrations.push('⚠️ working_hours: ' + e.message);
+    }
+    
+    // Add booking_preferences
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb`);
+      migrations.push('✅ Added booking_preferences');
+    } catch (e) {
+      migrations.push('⚠️ booking_preferences: ' + e.message);
+    }
+    
+    // Create index
+    try {
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
+      migrations.push('✅ Created index on google_id');
+    } catch (e) {
+      migrations.push('⚠️ Index: ' + e.message);
+    }
+    
+    // Add calendar_event_id to bookings
+    try {
+      await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
+      migrations.push('✅ Added calendar_event_id to bookings');
+    } catch (e) {
+      migrations.push('⚠️ calendar_event_id: ' + e.message);
+    }
+    
+    // Add meet_link to bookings
+    try {
+      await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meet_link TEXT`);
+      migrations.push('✅ Added meet_link to bookings');
+    } catch (e) {
+      migrations.push('⚠️ meet_link: ' + e.message);
+    }
+    
+    res.json({ 
+      success: true, 
+      migrations: migrations,
+      message: '🎉 Google OAuth migration completed!'
     });
   } catch (error) {
     console.error('Migration error:', error);
