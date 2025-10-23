@@ -693,6 +693,88 @@ app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'publi
 app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
 app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
 
+/* ----------------------------- Debug Endpoints ---------------------------- */
+app.get('/api/debug/email', (req, res) => {
+  res.json({
+    emailServiceLoaded: !!emailService,
+    emailServiceType: emailService ? typeof emailService : 'null',
+    emailServiceKeys: emailService ? Object.keys(emailService) : [],
+    resendApiKey: process.env.RESEND_API_KEY ? 'Set (length: ' + process.env.RESEND_API_KEY.length + ')' : 'Not set',
+    fromEmail: process.env.FROM_EMAIL || 'default: onboarding@resend.dev',
+    appUrl: process.env.APP_URL || 'default'
+  });
+});
+
+app.get('/api/debug/status', (req, res) => {
+  res.json({
+    server: 'running',
+    database: dbReady ? 'connected' : 'disconnected',
+    emailService: !!emailService,
+    timestamp: new Date().toISOString()
+  });
+});
+
+/* --------------------------- Database Migrations -------------------------- */
+app.get('/api/migrate/fix-bookings', async (req, res) => {
+  try {
+    const migrations = [];
+    
+    // Check if guest_notes column exists
+    const checkColumn = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='bookings' AND column_name='guest_notes'
+    `);
+    
+    if (checkColumn.rows.length === 0) {
+      await pool.query(`ALTER TABLE bookings ADD COLUMN guest_notes TEXT`);
+      migrations.push('Added guest_notes column');
+    } else {
+      migrations.push('guest_notes column already exists');
+    }
+    
+    // Check if booking_date column exists
+    const checkDate = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='bookings' AND column_name='booking_date'
+    `);
+    
+    if (checkDate.rows.length === 0) {
+      await pool.query(`ALTER TABLE bookings ADD COLUMN booking_date DATE`);
+      migrations.push('Added booking_date column');
+    } else {
+      migrations.push('booking_date column already exists');
+    }
+    
+    // Check if booking_time column exists
+    const checkTime = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='bookings' AND column_name='booking_time'
+    `);
+    
+    if (checkTime.rows.length === 0) {
+      await pool.query(`ALTER TABLE bookings ADD COLUMN booking_time VARCHAR(50)`);
+      migrations.push('Added booking_time column');
+    } else {
+      migrations.push('booking_time column already exists');
+    }
+    
+    res.json({ 
+      success: true, 
+      migrations: migrations,
+      message: 'Database migration completed!'
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hint: 'Check Railway logs for details'
+    });
+  }
+});
+
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
