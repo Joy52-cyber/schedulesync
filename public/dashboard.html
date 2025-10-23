@@ -165,7 +165,7 @@
             <div class="space-y-6">
                 <!-- Calendar Status -->
                 <div class="glass rounded-lg p-6">
-                    <h3 class="text-xl font-bold mb-4">Calendar Integration</h3>
+                    <h3 class="text-xl font-bold mb-4">📅 Calendar Integration</h3>
                     <div id="calendarStatus" class="space-y-3">
                         <!-- Calendar connections will be loaded here -->
                     </div>
@@ -175,6 +175,45 @@
                         <a href="/dashboard#integrations" class="inline-block px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-50 transition">
                             Connect Calendar
                         </a>
+                    </div>
+                </div>
+
+                <!-- Email Integration Status -->
+                <div class="glass rounded-lg p-6">
+                    <h3 class="text-xl font-bold mb-4">📧 Email Integration</h3>
+                    <div id="emailStatus" class="space-y-4">
+                        <!-- Email status will be loaded here -->
+                        <div class="flex items-center justify-between p-3 bg-white bg-opacity-10 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-xl">✉️</span>
+                                </div>
+                                <div>
+                                    <div class="font-semibold">Email Notifications</div>
+                                    <div class="text-sm text-purple-200" id="emailProvider">Loading...</div>
+                                </div>
+                            </div>
+                            <div id="emailStatusBadge">
+                                <span class="px-3 py-1 bg-yellow-500 bg-opacity-20 text-yellow-200 rounded-full text-xs font-semibold">
+                                    Checking...
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-sm text-purple-200">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <span id="bookingEmailsIcon">⏳</span>
+                                <span id="bookingEmailsText">Booking confirmations</span>
+                            </div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <span id="teamEmailsIcon">⏳</span>
+                                <span id="teamEmailsText">Team invitations</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span id="reminderEmailsIcon">⏳</span>
+                                <span id="reminderEmailsText">Meeting reminders</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -379,6 +418,65 @@
             }
         }
 
+        // Load email integration status
+        async function loadEmailStatus() {
+            try {
+                const response = await fetch('/api/debug/email');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const isConfigured = data.emailServiceLoaded && data.resendApiKey !== 'Not set';
+                    
+                    // Update provider text
+                    document.getElementById('emailProvider').textContent = 
+                        isConfigured ? `via ${data.fromEmail || 'Resend'}` : 'Not configured';
+                    
+                    // Update status badge
+                    const badge = document.getElementById('emailStatusBadge');
+                    if (isConfigured) {
+                        badge.innerHTML = `
+                            <span class="px-3 py-1 bg-green-500 bg-opacity-20 text-green-200 rounded-full text-xs font-semibold flex items-center space-x-1">
+                                <span class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></span>
+                                <span>Active</span>
+                            </span>
+                        `;
+                        
+                        // Update feature icons
+                        document.getElementById('bookingEmailsIcon').textContent = '✅';
+                        document.getElementById('teamEmailsIcon').textContent = '✅';
+                        document.getElementById('reminderEmailsIcon').textContent = '✅';
+                        
+                        document.getElementById('bookingEmailsText').innerHTML = '<strong>Booking confirmations</strong> - Active';
+                        document.getElementById('teamEmailsText').innerHTML = '<strong>Team invitations</strong> - Active';
+                        document.getElementById('reminderEmailsText').innerHTML = '<strong>Meeting reminders</strong> - Active';
+                    } else {
+                        badge.innerHTML = `
+                            <span class="px-3 py-1 bg-red-500 bg-opacity-20 text-red-200 rounded-full text-xs font-semibold">
+                                Inactive
+                            </span>
+                        `;
+                        
+                        // Update feature icons
+                        document.getElementById('bookingEmailsIcon').textContent = '❌';
+                        document.getElementById('teamEmailsIcon').textContent = '❌';
+                        document.getElementById('reminderEmailsIcon').textContent = '❌';
+                        
+                        document.getElementById('bookingEmailsText').innerHTML = 'Booking confirmations - <span class="text-red-200">Disabled</span>';
+                        document.getElementById('teamEmailsText').innerHTML = 'Team invitations - <span class="text-red-200">Disabled</span>';
+                        document.getElementById('reminderEmailsText').innerHTML = 'Meeting reminders - <span class="text-red-200">Disabled</span>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading email status:', error);
+                document.getElementById('emailProvider').textContent = 'Error loading status';
+                document.getElementById('emailStatusBadge').innerHTML = `
+                    <span class="px-3 py-1 bg-gray-500 bg-opacity-20 text-gray-200 rounded-full text-xs font-semibold">
+                        Error
+                    </span>
+                `;
+            }
+        }
+
         // Load activity (refresh)
         async function loadActivity() {
             await loadAnalytics();
@@ -404,12 +502,14 @@
         loadAnalytics();
         loadTeams();
         loadCalendars();
+        loadEmailStatus();
 
         // Refresh data every 30 seconds
         setInterval(() => {
             loadAnalytics();
             loadTeams();
             loadCalendars();
+            loadEmailStatus();
         }, 30000);
     </script>
 </body>
