@@ -1,6 +1,8 @@
 ﻿// server.js
-require('dotenv').config({ override: true });
+require('dotenv').config();
 
+// Debug: Show DATABASE_URL being used
+console.log('🔍 DATABASE_URL:', process.env.DATABASE_URL);
 
 // Google Auth service (optional - gracefully handles if not configured)
 let googleAuth = null;
@@ -17,7 +19,6 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
-console.log('🔍 DATABASE_URL being used:', process.env.DATABASE_URL?.substring(0, 80) + '...');
 
 // Email service (optional - gracefully handles if not configured)
 let emailService = null;
@@ -188,18 +189,7 @@ async function initDatabase() {
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-  (async () => {
-  try {
-    const who = await pool.query(`
-      SELECT current_user, current_database(), inet_server_addr() AS host, inet_server_port() AS port
-    `);
-    console.log('DB identity:', who.rows[0]);
-    console.log('ENV DATABASE_URL (masked):', (process.env.DATABASE_URL || '').replace(/:(?!\/\/).+@/,'://***@'));
-  } catch (e) {
-    console.error('DB identity check failed:', e);
-  }
-})();
-
+  
   // Add columns to bookings if table already exists
   try {
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
