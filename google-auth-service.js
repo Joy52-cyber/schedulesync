@@ -5,10 +5,16 @@ const { OAuth2Client } = require('google-auth-library');
 
 // Initialize OAuth2 client
 const getOAuth2Client = () => {
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL;
+  
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !redirectUri) {
+    throw new Error('Missing Google OAuth credentials. Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.');
+  }
+  
   return new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   );
 };
 
