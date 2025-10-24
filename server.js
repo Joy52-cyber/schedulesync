@@ -28,6 +28,7 @@ try {
   console.log('✅ Email service loaded');
 } catch (error) {
   console.log('ℹ️  Email service not found - emails will be disabled');
+  console.log('   Error:', error.message);
 }
 
 const app = express();
