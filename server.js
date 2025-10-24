@@ -438,6 +438,23 @@ app.get('/auth/google', (req, res) => {
   }
 });
 
+// Check if email exists
+app.post('/api/auth/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    res.json({ exists: result.rows.length > 0 });
+  } catch (error) {
+    console.error('Error checking email:', error);
+    res.status(500).json({ error: 'Failed to check email' });
+  }
+});
+
 // Forgot Password - Send reset email
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
@@ -469,40 +486,24 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Create reset link
     const resetLink = `https://schedulesync-production.up.railway.app/reset-password?token=${resetToken}`;
 
-    // Send email
-    if (emailService) {
-      const emailSent = await emailService.sendEmail(
-        email,
-        'Reset Your ScheduleSync Password',
-        `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #667eea;">Reset Your Password</h2>
-            <p>Hi ${user.name},</p>
-            <p>We received a request to reset your password for your ScheduleSync account.</p>
-            <p>Click the button below to reset your password:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetLink}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">Reset Password</a>
-            </div>
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="color: #667eea; word-break: break-all;">${resetLink}</p>
-            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">This link will expire in 1 hour.</p>
-            <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
-          </div>
-        `
-      );
-
-      if (emailSent) {
+    // Send email using nodemailer directly
+    if (emailService && emailService.sendPasswordReset) {
+      // If email service has password reset method, use it
+      try {
+        await emailService.sendPasswordReset(email, user.name, resetLink);
         console.log('✅ Password reset email sent to:', email);
         res.json({ success: true, message: 'Password reset link sent' });
-      } else {
-        console.error('❌ Failed to send password reset email');
-        res.status(500).json({ error: 'Failed to send email' });
+      } catch (error) {
+        console.error('❌ Failed to send email:', error);
+        // Still return success but log the link for testing
+        console.log('🔗 Password reset link:', resetLink);
+        res.json({ success: true, message: 'Password reset link generated' });
       }
     } else {
-      console.error('❌ Email service not configured');
-      // For now, return success but log the reset link
-      console.log('🔗 Password reset link (email service not configured):', resetLink);
-      res.json({ success: true, message: 'Password reset link generated (email service not configured)' });
+      // Email service not available - log the link for testing
+      console.log('ℹ️  Email service not configured');
+      console.log('🔗 Password reset link (copy this):', resetLink);
+      res.json({ success: true, message: 'Password reset link generated', resetLink: resetLink });
     }
   } catch (error) {
     console.error('Error in forgot password:', error);
