@@ -18,6 +18,7 @@ try {
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const path = require('path');
 
