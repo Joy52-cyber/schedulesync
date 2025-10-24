@@ -1,402 +1,201 @@
-﻿// email-service-enhanced.js - Complete email service with team invitations
+﻿const nodemailer = require('nodemailer');
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
-const APP_URL = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
+// Email configuration
+const EMAIL_USER = process.env.EMAIL_USER || process.env.GMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS || process.env.GMAIL_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
-// Check if Resend is configured
-function isConfigured() {
-  if (!RESEND_API_KEY) {
-    console.warn('⚠️  Resend not configured. Set RESEND_API_KEY in environment variables.');
+let transporter = null;
+
+// Initialize transporter
+if (EMAIL_USER && EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: EMAIL_USER,
+      pass: EMAIL_PASS
+    }
+  });
+  console.log('✅ Email transporter configured');
+} else {
+  console.log('ℹ️  Email not configured (missing EMAIL_USER or EMAIL_PASS)');
+}
+
+// Send password reset email
+async function sendPasswordReset(to, userName, resetLink) {
+  if (!transporter) {
+    console.log('⚠️  Email service not available');
     return false;
   }
-  return true;
-}
 
-// Send email using Resend API
-async function sendEmail(to, subject, html) {
-  if (!isConfigured()) {
-    return { success: false, error: 'Resend not configured' };
-  }
-
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: [to],
-        subject: subject,
-        html: html
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ Resend API error:', data);
-      return { success: false, error: data.message || 'Failed to send email' };
-    }
-
-    console.log(`✅ Email sent to ${to} via Resend`);
-    return { success: true, id: data.id };
-  } catch (error) {
-    console.error('❌ Error sending email:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-// Email template wrapper
-function emailTemplate(title, emoji, content) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; text-align: center; }
-        .header h1 { margin: 0; font-size: 32px; }
-        .emoji { font-size: 48px; margin-bottom: 10px; }
-        .content { background: #f9f9f9; padding: 30px 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        .button { display: inline-block; background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
-        .button-secondary { background: #6b7280; }
-        .button-danger { background: #ef4444; }
-        .footer { text-align: center; color: #999; font-size: 13px; padding: 20px; }
-        .alert { background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; margin: 20px 0; border-radius: 6px; }
-        .success { background: #d1fae5; border-left: 4px solid #10b981; }
-        .info { background: #dbeafe; border-left: 4px solid #3b82f6; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="emoji">${emoji}</div>
-          <h1>${title}</h1>
-        </div>
-        <div class="content">
-          ${content}
+  const mailOptions = {
+    from: `"ScheduleSync" <${EMAIL_FROM}>`,
+    to: to,
+    subject: 'Reset Your ScheduleSync Password',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 20px 0; }
+          .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+          .link { color: #667eea; word-break: break-all; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">🔒 Reset Your Password</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>We received a request to reset your password for your ScheduleSync account.</p>
+            <p>Click the button below to reset your password:</p>
+            <div style="text-align: center;">
+              <a href="${resetLink}" class="button">Reset Password</a>
+            </div>
+            <p>Or copy and paste this link into your browser:</p>
+            <p class="link">${resetLink}</p>
+            <p style="margin-top: 30px; color: #6b7280; font-size: 14px;">
+              <strong>This link will expire in 1 hour.</strong>
+            </p>
+            <p style="color: #6b7280; font-size: 14px;">
+              If you didn't request this, you can safely ignore this email. Your password will not be changed.
+            </p>
+          </div>
           <div class="footer">
-            <p>This is an automated message from <strong>ScheduleSync</strong></p>
             <p>© ${new Date().getFullYear()} ScheduleSync. All rights reserved.</p>
           </div>
         </div>
-      </div>
-    </body>
-    </html>
-  `;
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log('✅ Password reset email sent to:', to);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send password reset email:', error.message);
+    return false;
+  }
 }
 
-// ============================================================================
-// TEAM INVITATION EMAILS
-// ============================================================================
-
-// Send team invitation
-async function sendTeamInvitation(inviteeEmail, inviteeName, teamName, inviterName, teamId) {
-  const content = `
-    <p style="font-size: 16px;">Hi ${inviteeName || 'there'},</p>
-    <p><strong>${inviterName}</strong> has invited you to join the team <strong>${teamName}</strong> on ScheduleSync!</p>
-    
-    <div class="card info">
-      <h3 style="margin-top: 0; color: #3b82f6;">What is ScheduleSync?</h3>
-      <p style="margin-bottom: 0;">ScheduleSync is a powerful scheduling platform that helps teams manage their availability and bookings efficiently.</p>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-top: 0; color: #667eea;">Team Details</h3>
-      <p><strong>Team Name:</strong> ${teamName}</p>
-      <p><strong>Invited By:</strong> ${inviterName}</p>
-      <p style="margin-bottom: 0;"><strong>Your Role:</strong> Team Member</p>
-    </div>
-
-    <div style="text-align: center;">
-      <a href="${APP_URL}/login?join_team=${teamId}" class="button">Accept Invitation</a>
-      <br>
-      <a href="${APP_URL}/signup?join_team=${teamId}" class="button button-secondary">Sign Up & Join</a>
-    </div>
-
-    <p style="font-size: 14px; color: #666; margin-top: 30px;">
-      <strong>What happens next?</strong><br>
-      1. Click the button above to accept<br>
-      2. Log in or create an account<br>
-      3. Start collaborating with your team!
-    </p>
-  `;
-
-  return await sendEmail(
-    inviteeEmail,
-    `You're invited to join ${teamName} on ScheduleSync!`,
-    emailTemplate(`Team Invitation`, '👥', content)
-  );
-}
-
-// Send team member welcome email (after they join)
-async function sendTeamWelcome(memberEmail, memberName, teamName, teamOwner) {
-  const content = `
-    <p style="font-size: 16px;">Welcome, <strong>${memberName}</strong>! 🎉</p>
-    <p>You've successfully joined <strong>${teamName}</strong>.</p>
-    
-    <div class="card success">
-      <h3 style="margin-top: 0; color: #10b981;">You're all set!</h3>
-      <p style="margin-bottom: 0;">You can now manage your availability, view bookings, and collaborate with your team.</p>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-top: 0; color: #667eea;">Quick Start Guide</h3>
-      <p><strong>1. Set Your Availability</strong><br>
-      Go to the Availability page and mark when you're free for meetings.</p>
-      
-      <p><strong>2. View Team Bookings</strong><br>
-      Check the dashboard to see all upcoming team bookings.</p>
-      
-      <p><strong>3. Share Your Link</strong><br>
-      Get your team's public booking link and share it with clients.</p>
-    </div>
-
-    <div style="text-align: center;">
-      <a href="${APP_URL}/dashboard" class="button">Go to Dashboard</a>
-      <br>
-      <a href="${APP_URL}/availability" class="button button-secondary">Set Availability</a>
-    </div>
-
-    <p style="font-size: 14px; color: #666;">
-      <strong>Team Owner:</strong> ${teamOwner}<br>
-      If you have questions, reach out to your team owner.
-    </p>
-  `;
-
-  return await sendEmail(
-    memberEmail,
-    `Welcome to ${teamName}!`,
-    emailTemplate(`Welcome to the Team!`, '🎉', content)
-  );
-}
-
-// Send member removed notification
-async function sendMemberRemovedNotification(memberEmail, memberName, teamName, reason) {
-  const content = `
-    <p style="font-size: 16px;">Hi ${memberName},</p>
-    <p>You have been removed from the team <strong>${teamName}</strong>.</p>
-    
-    <div class="card">
-      <h3 style="margin-top: 0; color: #ef4444;">Account Status</h3>
-      <p><strong>Team:</strong> ${teamName}</p>
-      <p><strong>Status:</strong> Removed</p>
-      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-    </div>
-
-    <p>You will no longer have access to this team's:</p>
-    <ul>
-      <li>Bookings and schedules</li>
-      <li>Team availability calendar</li>
-      <li>Team settings and members</li>
-    </ul>
-
-    <p>If you believe this was a mistake, please contact the team owner.</p>
-
-    <div style="text-align: center;">
-      <a href="${APP_URL}/dashboard" class="button button-secondary">View Your Teams</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    memberEmail,
-    `Removed from ${teamName}`,
-    emailTemplate(`Team Update`, '👋', content)
-  );
-}
-
-// Send team deleted notification to all members
-async function sendTeamDeletedNotification(memberEmail, memberName, teamName, deletedBy) {
-  const content = `
-    <p style="font-size: 16px;">Hi ${memberName},</p>
-    <p>The team <strong>${teamName}</strong> has been deleted by ${deletedBy}.</p>
-    
-    <div class="card alert">
-      <h3 style="margin-top: 0;">Team Deleted</h3>
-      <p style="margin-bottom: 0;">This team and all its data have been permanently removed from ScheduleSync.</p>
-    </div>
-
-    <div class="card">
-      <p><strong>What this means:</strong></p>
-      <ul style="margin: 10px 0;">
-        <li>All team bookings have been cancelled</li>
-        <li>Team availability is no longer accessible</li>
-        <li>The public booking link is inactive</li>
-        <li>Team data has been removed</li>
-      </ul>
-    </div>
-
-    <p>If you have any questions, please contact ${deletedBy}.</p>
-
-    <div style="text-align: center;">
-      <a href="${APP_URL}/dashboard" class="button button-secondary">View Your Other Teams</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    memberEmail,
-    `Team Deleted: ${teamName}`,
-    emailTemplate(`Team Deleted`, '🗑️', content)
-  );
-}
-
-// ============================================================================
-// BOOKING EMAILS
-// ============================================================================
-
-// Send booking confirmation to guest
+// Send booking confirmation (existing method - keeping for compatibility)
 async function sendBookingConfirmation(booking, team) {
-  const content = `
-    <p style="font-size: 16px;">Hi <strong>${booking.guest_name}</strong>,</p>
-    <p>Your meeting with <strong>${team.name}</strong> has been successfully confirmed.</p>
-    
-    <div class="card success">
-      <h2 style="margin-top: 0; color: #10b981;">✓ Booking Confirmed</h2>
-    </div>
+  if (!transporter) {
+    console.log('⚠️  Email service not available');
+    return false;
+  }
 
-    <div class="card">
-      <h3 style="margin-top: 0; color: #667eea;">Booking Details</h3>
-      <p><strong>Team:</strong> ${team.name}</p>
-      <p><strong>Date:</strong> ${booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD'}</p>
-      <p><strong>Time:</strong> ${booking.booking_time || 'TBD'}</p>
-      <p><strong>Status:</strong> <span style="color: #22c55e; font-weight: bold;">${booking.status}</span></p>
-      <p><strong>Booking ID:</strong> #${booking.id}</p>
-    </div>
+  const mailOptions = {
+    from: `"ScheduleSync" <${EMAIL_FROM}>`,
+    to: booking.guest_email,
+    subject: `Booking Confirmed: ${team.name}`,
+    html: `
+      <h2>Your booking is confirmed!</h2>
+      <p>Hi ${booking.guest_name},</p>
+      <p>Your booking with <strong>${team.name}</strong> has been confirmed.</p>
+      <p><strong>Date:</strong> ${booking.booking_date}</p>
+      <p><strong>Time:</strong> ${booking.booking_time}</p>
+      ${booking.meet_link ? `<p><strong>Meeting Link:</strong> <a href="${booking.meet_link}">${booking.meet_link}</a></p>` : ''}
+      ${booking.guest_notes ? `<p><strong>Notes:</strong> ${booking.guest_notes}</p>` : ''}
+      <p>Thank you for using ScheduleSync!</p>
+    `
+  };
 
-    ${booking.guest_notes ? `
-      <div class="card">
-        <h3 style="margin-top: 0; color: #667eea;">Your Notes</h3>
-        <p style="margin: 0;">${booking.guest_notes}</p>
-      </div>
-    ` : ''}
-
-    <p style="font-size: 16px;">We look forward to meeting with you!</p>
-    
-    <div style="text-align: center;">
-      <a href="${APP_URL}/booking/${booking.id}" class="button">View Booking Details</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    booking.guest_email,
-    `Booking Confirmed - ${team.name}`,
-    emailTemplate('Booking Confirmed!', '⚡', content)
-  );
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Failed to send booking confirmation:', error);
+    return false;
+  }
 }
 
 // Send booking notification to team owner
 async function sendBookingNotificationToOwner(booking, team, ownerEmail) {
-  const content = `
-    <div class="alert">
-      <strong>Action Required:</strong> You have a new booking for ${team.name}
-    </div>
-    
-    <div class="card">
-      <h2 style="margin-top: 0; color: #667eea;">Guest Information</h2>
-      <p><strong>Name:</strong> ${booking.guest_name}</p>
-      <p><strong>Email:</strong> ${booking.guest_email}</p>
-      <p><strong>Date:</strong> ${booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD'}</p>
-      <p><strong>Time:</strong> ${booking.booking_time || 'TBD'}</p>
-      <p><strong>Status:</strong> <span style="color: #22c55e; font-weight: bold;">${booking.status}</span></p>
-    </div>
+  if (!transporter) return false;
 
-    ${booking.guest_notes ? `
-      <div class="card">
-        <h3 style="margin-top: 0; color: #667eea;">Guest Notes</h3>
-        <p style="margin: 0;">${booking.guest_notes}</p>
-      </div>
-    ` : ''}
+  const mailOptions = {
+    from: `"ScheduleSync" <${EMAIL_FROM}>`,
+    to: ownerEmail,
+    subject: `New Booking: ${team.name}`,
+    html: `
+      <h2>New booking received!</h2>
+      <p>A new booking has been made for <strong>${team.name}</strong>.</p>
+      <p><strong>Guest:</strong> ${booking.guest_name} (${booking.guest_email})</p>
+      <p><strong>Date:</strong> ${booking.booking_date}</p>
+      <p><strong>Time:</strong> ${booking.booking_time}</p>
+      ${booking.guest_notes ? `<p><strong>Notes:</strong> ${booking.guest_notes}</p>` : ''}
+    `
+  };
 
-    <div style="text-align: center;">
-      <a href="${APP_URL}/dashboard" class="button">View in Dashboard</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    ownerEmail,
-    `New Booking - ${team.name}`,
-    emailTemplate('New Booking Received!', '📅', content)
-  );
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Failed to send owner notification:', error);
+    return false;
+  }
 }
 
-// Send booking cancellation to guest
-async function sendBookingCancellation(booking, team, reason) {
-  const content = `
-    <p style="font-size: 16px;">Hi ${booking.guest_name},</p>
-    <p>Your booking with <strong>${team.name}</strong> has been cancelled.</p>
-    
-    <div class="card alert">
-      <h3 style="margin-top: 0;">Booking Cancelled</h3>
-      <p style="margin-bottom: 0;">This booking is no longer active.</p>
-    </div>
+// Send team invitation
+async function sendTeamInvitation(email, teamName, inviteLink) {
+  if (!transporter) return false;
 
-    <div class="card">
-      <h3 style="margin-top: 0; color: #667eea;">Booking Details</h3>
-      <p><strong>Team:</strong> ${team.name}</p>
-      <p><strong>Date:</strong> ${booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD'}</p>
-      <p><strong>Time:</strong> ${booking.booking_time || 'TBD'}</p>
-      <p><strong>Booking ID:</strong> #${booking.id}</p>
-      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-    </div>
+  const mailOptions = {
+    from: `"ScheduleSync" <${EMAIL_FROM}>`,
+    to: email,
+    subject: `You're invited to join ${teamName}`,
+    html: `
+      <h2>Team Invitation</h2>
+      <p>You've been invited to join <strong>${teamName}</strong> on ScheduleSync.</p>
+      <p><a href="${inviteLink}">Click here to accept the invitation</a></p>
+    `
+  };
 
-    <p>If you'd like to reschedule, you can book a new time using the link below.</p>
-
-    <div style="text-align: center;">
-      <a href="${APP_URL}/book/${team.id}" class="button">Book New Time</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    booking.guest_email,
-    `Booking Cancelled - ${team.name}`,
-    emailTemplate('Booking Cancelled', '❌', content)
-  );
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Failed to send team invitation:', error);
+    return false;
+  }
 }
 
-// Send booking reminder
-async function sendBookingReminder(booking, team) {
-  const content = `
-    <div class="card alert">
-      <h2 style="margin-top: 0;">Your meeting is coming up soon!</h2>
-      <p style="margin-bottom: 0;">This is a friendly reminder about your upcoming meeting.</p>
-    </div>
-    
-    <div class="card">
-      <h3 style="margin-top: 0; color: #667eea;">Meeting Details</h3>
-      <p><strong>Team:</strong> ${team.name}</p>
-      <p><strong>Date:</strong> ${booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD'}</p>
-      <p><strong>Time:</strong> ${booking.booking_time || 'TBD'}</p>
-    </div>
+// Send team welcome
+async function sendTeamWelcome(email, teamName) {
+  if (!transporter) return false;
 
-    <p style="font-size: 16px;">We look forward to seeing you!</p>
+  const mailOptions = {
+    from: `"ScheduleSync" <${EMAIL_FROM}>`,
+    to: email,
+    subject: `Welcome to ${teamName}!`,
+    html: `
+      <h2>Welcome!</h2>
+      <p>You've successfully joined <strong>${teamName}</strong> on ScheduleSync.</p>
+    `
+  };
 
-    <div style="text-align: center;">
-      <a href="${APP_URL}/booking/${booking.id}" class="button">View Details</a>
-    </div>
-  `;
-
-  return await sendEmail(
-    booking.guest_email,
-    `Reminder: Upcoming Meeting - ${team.name}`,
-    emailTemplate('Meeting Reminder', '⏰', content)
-  );
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Failed to send welcome email:', error);
+    return false;
+  }
 }
 
 module.exports = {
-  // Team emails
-  sendTeamInvitation,
-  sendTeamWelcome,
-  sendMemberRemovedNotification,
-  sendTeamDeletedNotification,
-  
-  // Booking emails
+  sendPasswordReset,
   sendBookingConfirmation,
   sendBookingNotificationToOwner,
-  sendBookingCancellation,
-  sendBookingReminder
+  sendTeamInvitation,
+  sendTeamWelcome
 };
