@@ -160,6 +160,17 @@ async function initDatabase() {
     console.log('✅ Added microsoft_refresh_token column');
   } catch (e) { /* Already exists */ }
   
+  // Add password reset token columns
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`);
+    console.log('✅ Added reset_token column');
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`);
+    console.log('✅ Added reset_token_expires column');
+  } catch (e) { /* Already exists */ }
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teams (
       id SERIAL PRIMARY KEY,
@@ -424,6 +435,78 @@ app.get('/auth/google', (req, res) => {
   } catch (error) {
     console.error('Error generating auth URL:', error);
     res.redirect('/login?error=oauth_failed');
+  }
+});
+
+// Forgot Password - Send reset email
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if user exists
+    const userResult = await pool.query('SELECT id, name, email FROM users WHERE email = $1', [email]);
+
+    if (userResult.rows.length === 0) {
+      // For security, return success even if user doesn't exist
+      return res.json({ success: true, message: 'If an account exists, a reset link has been sent' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate reset token
+    const resetToken = jwt.sign({ userId: user.id, type: 'password_reset' }, JWT_SECRET, { expiresIn: '1h' });
+    
+    // Store reset token in database (optional - for extra security)
+    await pool.query(
+      'UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL \'1 hour\' WHERE id = $2',
+      [resetToken, user.id]
+    );
+
+    // Create reset link
+    const resetLink = `https://schedulesync-production.up.railway.app/reset-password?token=${resetToken}`;
+
+    // Send email
+    if (emailService) {
+      const emailSent = await emailService.sendEmail(
+        email,
+        'Reset Your ScheduleSync Password',
+        `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #667eea;">Reset Your Password</h2>
+            <p>Hi ${user.name},</p>
+            <p>We received a request to reset your password for your ScheduleSync account.</p>
+            <p>Click the button below to reset your password:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetLink}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">Reset Password</a>
+            </div>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="color: #667eea; word-break: break-all;">${resetLink}</p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">This link will expire in 1 hour.</p>
+            <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        `
+      );
+
+      if (emailSent) {
+        console.log('✅ Password reset email sent to:', email);
+        res.json({ success: true, message: 'Password reset link sent' });
+      } else {
+        console.error('❌ Failed to send password reset email');
+        res.status(500).json({ error: 'Failed to send email' });
+      }
+    } else {
+      console.error('❌ Email service not configured');
+      // For now, return success but log the reset link
+      console.log('🔗 Password reset link (email service not configured):', resetLink);
+      res.json({ success: true, message: 'Password reset link generated (email service not configured)' });
+    }
+  } catch (error) {
+    console.error('Error in forgot password:', error);
+    res.status(500).json({ error: 'Failed to process request' });
   }
 });
 
