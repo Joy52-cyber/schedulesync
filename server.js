@@ -144,6 +144,22 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb`);
   } catch (e) { /* Already exists */ }
   
+  // Add Microsoft OAuth columns if they don't exist
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_id VARCHAR(255) UNIQUE`);
+    console.log('✅ Added microsoft_id column');
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_access_token TEXT`);
+    console.log('✅ Added microsoft_access_token column');
+  } catch (e) { /* Already exists */ }
+  
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_refresh_token TEXT`);
+    console.log('✅ Added microsoft_refresh_token column');
+  } catch (e) { /* Already exists */ }
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teams (
       id SERIAL PRIMARY KEY,
@@ -1734,6 +1750,198 @@ app.post('/api/calendar/disconnect', authenticateToken, async (req, res) => {
 });
 
 /* ======================================================================== */
+
+/* ==================== MICROSOFT CALENDAR ENDPOINTS ==================== */
+
+const axios = require('axios');
+
+// Microsoft OAuth configuration
+const MICROSOFT_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
+const MICROSOFT_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+const MICROSOFT_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
+
+const MICROSOFT_SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
+  'Calendars.ReadWrite',
+  'Calendars.Read',
+  'User.Read'
+].join(' ');
+
+// Get Microsoft OAuth authorization URL
+app.get('/api/auth/microsoft', (req, res) => {
+  try {
+    if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CALLBACK_URL) {
+      return res.status(503).json({ error: 'Microsoft Calendar integration is not configured' });
+    }
+
+    const authUrl = `${MICROSOFT_AUTH_URL}?` +
+      `client_id=${encodeURIComponent(MICROSOFT_CLIENT_ID)}` +
+      `&response_type=code` +
+      `&redirect_uri=${encodeURIComponent(MICROSOFT_CALLBACK_URL)}` +
+      `&response_mode=query` +
+      `&scope=${encodeURIComponent(MICROSOFT_SCOPES)}`;
+
+    res.json({ authUrl });
+  } catch (error) {
+    console.error('Error generating Microsoft auth URL:', error);
+    res.status(500).json({ error: 'Failed to generate authorization URL' });
+  }
+});
+
+// Handle Microsoft OAuth callback
+app.get('/api/calendar/microsoft/callback', async (req, res) => {
+  try {
+    const { code, error: oauthError } = req.query;
+
+    if (oauthError) {
+      console.error('Microsoft OAuth error:', oauthError);
+      return res.redirect('/calendar-setup?error=' + encodeURIComponent(oauthError));
+    }
+
+    if (!code) {
+      return res.redirect('/calendar-setup?error=no_authorization_code');
+    }
+
+    console.log('📝 Received Microsoft OAuth code, exchanging for tokens...');
+
+    // Exchange code for tokens
+    const tokenResponse = await axios.post(MICROSOFT_TOKEN_URL, new URLSearchParams({
+      client_id: MICROSOFT_CLIENT_ID,
+      client_secret: MICROSOFT_CLIENT_SECRET,
+      code: code,
+      redirect_uri: MICROSOFT_CALLBACK_URL,
+      grant_type: 'authorization_code'
+    }), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const { access_token, refresh_token } = tokenResponse.data;
+    console.log('✅ Got tokens from Microsoft');
+
+    // Get user info
+    const userResponse = await axios.get(`${MICROSOFT_GRAPH_URL}/me`, {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+
+    const userInfo = userResponse.data;
+    console.log('✅ Got user info:', userInfo.mail || userInfo.userPrincipalName);
+
+    // Update user in database with Microsoft tokens
+    const result = await pool.query(
+      `UPDATE users 
+       SET microsoft_id = $1,
+           microsoft_access_token = $2,
+           microsoft_refresh_token = $3,
+           email = COALESCE(email, $4)
+       WHERE email = $4 OR id = (SELECT id FROM users WHERE email = $4 LIMIT 1)
+       RETURNING id, email, name`,
+      [
+        userInfo.id,
+        access_token,
+        refresh_token,
+        userInfo.mail || userInfo.userPrincipalName
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      console.error('❌ User not found with email:', userInfo.mail || userInfo.userPrincipalName);
+      return res.redirect('/calendar-setup?error=user_not_found');
+    }
+
+    console.log('✅ Updated user in database:', result.rows[0].email);
+
+    // Redirect to calendar selection page
+    res.redirect('/calendar-setup?connected=microsoft');
+  } catch (error) {
+    console.error('❌ Error in Microsoft OAuth callback:', error.response?.data || error.message);
+    res.redirect('/calendar-setup?error=' + encodeURIComponent(error.message));
+  }
+});
+
+// Get user's Microsoft Calendars
+app.get('/api/calendars/microsoft', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Get user's tokens
+    const userResult = await pool.query(
+      'SELECT microsoft_access_token, microsoft_refresh_token FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    if (!user.microsoft_access_token || !user.microsoft_refresh_token) {
+      return res.status(401).json({ 
+        error: 'Microsoft Calendar not connected. Please connect your calendar first.',
+        needsAuth: true 
+      });
+    }
+
+    // Get calendar list from Microsoft
+    try {
+      const response = await axios.get(`${MICROSOFT_GRAPH_URL}/me/calendars`, {
+        headers: { Authorization: `Bearer ${user.microsoft_access_token}` }
+      });
+
+      const calendars = response.data.value.map(cal => ({
+        id: cal.id,
+        name: cal.name,
+        primary: cal.isDefaultCalendar || false,
+        canEdit: cal.canEdit !== false,
+        owner: cal.owner?.name || cal.owner?.address,
+        color: cal.color
+      }));
+
+      res.json(calendars);
+    } catch (calError) {
+      console.error('Error fetching Microsoft calendars:', calError.response?.data || calError);
+      
+      // If token expired, try to refresh
+      if (calError.response?.status === 401) {
+        return res.status(401).json({ 
+          error: 'Calendar access expired. Please reconnect your Microsoft Calendar.',
+          needsReauth: true 
+        });
+      }
+      
+      throw calError;
+    }
+  } catch (error) {
+    console.error('Error fetching Microsoft calendars:', error);
+    res.status(500).json({ error: 'Failed to fetch calendars' });
+  }
+});
+
+// Disconnect Microsoft Calendar
+app.post('/api/calendar/microsoft/disconnect', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    await pool.query(
+      `UPDATE users 
+       SET microsoft_access_token = NULL,
+           microsoft_refresh_token = NULL,
+           microsoft_id = NULL
+       WHERE id = $1`,
+      [userId]
+    );
+
+    res.json({ success: true, message: 'Microsoft Calendar disconnected successfully' });
+  } catch (error) {
+    console.error('Error disconnecting Microsoft calendar:', error);
+    res.status(500).json({ error: 'Failed to disconnect calendar' });
+  }
+});
+
+/* ====================================================================== */
 
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
