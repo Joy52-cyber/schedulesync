@@ -1873,9 +1873,6 @@ app.get('/api/calendar/microsoft/callback', async (req, res) => {
     res.redirect('/login?error=' + encodeURIComponent(error.message));
   }
 });
-    res.redirect('/calendar-setup?error=' + encodeURIComponent(error.message));
-  }
-});
 
 // Get user's Microsoft Calendars
 app.get('/api/calendars/microsoft', authenticateToken, async (req, res) => {
