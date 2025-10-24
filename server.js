@@ -1262,6 +1262,7 @@ app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 
 app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
 app.get('/calendar-setup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'calendar-setup-updated.html')));
 app.get('/teams/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-detail.html')));
+app.get('/forgot-password', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
 
 /* ----------------------------- Debug Endpoints ---------------------------- */
 app.get('/api/debug/email', (req, res) => {
@@ -1798,11 +1799,11 @@ app.get('/api/calendar/microsoft/callback', async (req, res) => {
 
     if (oauthError) {
       console.error('Microsoft OAuth error:', oauthError);
-      return res.redirect('/calendar-setup?error=' + encodeURIComponent(oauthError));
+      return res.redirect('/login?error=' + encodeURIComponent(oauthError));
     }
 
     if (!code) {
-      return res.redirect('/calendar-setup?error=no_authorization_code');
+      return res.redirect('/login?error=no_authorization_code');
     }
 
     console.log('📝 Received Microsoft OAuth code, exchanging for tokens...');
@@ -1827,36 +1828,51 @@ app.get('/api/calendar/microsoft/callback', async (req, res) => {
     });
 
     const userInfo = userResponse.data;
-    console.log('✅ Got user info:', userInfo.mail || userInfo.userPrincipalName);
+    const email = userInfo.mail || userInfo.userPrincipalName;
+    const name = userInfo.displayName || email.split('@')[0];
+    
+    console.log('✅ Got user info:', email);
 
-    // Update user in database with Microsoft tokens
-    const result = await pool.query(
-      `UPDATE users 
-       SET microsoft_id = $1,
-           microsoft_access_token = $2,
-           microsoft_refresh_token = $3,
-           email = COALESCE(email, $4)
-       WHERE email = $4 OR id = (SELECT id FROM users WHERE email = $4 LIMIT 1)
-       RETURNING id, email, name`,
-      [
-        userInfo.id,
-        access_token,
-        refresh_token,
-        userInfo.mail || userInfo.userPrincipalName
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      console.error('❌ User not found with email:', userInfo.mail || userInfo.userPrincipalName);
-      return res.redirect('/calendar-setup?error=user_not_found');
+    // Try to find existing user
+    let userResult = await pool.query('SELECT id, email, name FROM users WHERE email = $1', [email]);
+    
+    let userId;
+    if (userResult.rows.length === 0) {
+      // User doesn't exist - create new user
+      console.log('📝 Creating new user from Microsoft OAuth...');
+      const newUser = await pool.query(
+        `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email, name`,
+        [name, email, userInfo.id, access_token, refresh_token]
+      );
+      userId = newUser.rows[0].id;
+      console.log('✅ Created new user:', email);
+    } else {
+      // User exists - update with Microsoft credentials
+      console.log('📝 Updating existing user with Microsoft credentials...');
+      await pool.query(
+        `UPDATE users 
+         SET microsoft_id = $1,
+             microsoft_access_token = $2,
+             microsoft_refresh_token = $3
+         WHERE email = $4`,
+        [userInfo.id, access_token, refresh_token, email]
+      );
+      userId = userResult.rows[0].id;
+      console.log('✅ Updated user:', email);
     }
 
-    console.log('✅ Updated user in database:', result.rows[0].email);
-
-    // Redirect to calendar selection page
-    res.redirect('/calendar-setup?connected=microsoft');
+    // Create JWT token and redirect to dashboard
+    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+    
+    // Redirect to dashboard with token (frontend will store it)
+    res.redirect(`/dashboard?token=${token}&microsoft=connected`);
   } catch (error) {
     console.error('❌ Error in Microsoft OAuth callback:', error.response?.data || error.message);
+    res.redirect('/login?error=' + encodeURIComponent(error.message));
+  }
+});
     res.redirect('/calendar-setup?error=' + encodeURIComponent(error.message));
   }
 });
