@@ -511,6 +511,69 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
+// Reset Password - Actually reset the password
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.type !== 'password_reset') {
+        return res.status(400).json({ error: 'Invalid token type' });
+      }
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid or expired token' });
+    }
+
+    // Check if token matches and hasn't expired
+    const userResult = await pool.query(
+      'SELECT id, reset_token, reset_token_expires FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if token matches (optional extra security)
+    if (user.reset_token !== token) {
+      return res.status(400).json({ error: 'Token mismatch' });
+    }
+
+    // Check if token expired
+    if (new Date() > new Date(user.reset_token_expires)) {
+      return res.status(400).json({ error: 'Token has expired. Please request a new password reset.' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update password and clear reset token
+    await pool.query(
+      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+      [hashedPassword, decoded.userId]
+    );
+
+    console.log('✅ Password reset successfully for user:', decoded.userId);
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // Google OAuth callback - handles the redirect from Google
 app.get('/auth/google/callback', async (req, res) => {
   if (!googleAuth) {
@@ -1347,6 +1410,7 @@ app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 
 app.get('/calendar-setup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'calendar-setup-updated.html')));
 app.get('/teams/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-detail.html')));
 app.get('/forgot-password', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
+app.get('/reset-password', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'reset-password.html')));
 
 /* ----------------------------- Debug Endpoints ---------------------------- */
 app.get('/api/debug/email', (req, res) => {
