@@ -408,13 +408,53 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const out = await pool.query('SELECT id,name,email,password FROM users WHERE email=$1', [email]);
-    if (!out.rowCount || out.rows[0].password !== password) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: out.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ success: true, token, user: { id: out.rows[0].id, name: out.rows[0].name, email: out.rows[0].email } });
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const out = await pool.query('SELECT id, name, email, password FROM users WHERE email = $1', [email]);
+    
+    if (!out.rowCount) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = out.rows[0];
+
+    // Check if password is hashed (starts with $2b$ for bcrypt)
+    let passwordValid = false;
+    if (user.password && user.password.startsWith('$2b$')) {
+      // Hashed password - use bcrypt compare
+      passwordValid = await bcrypt.compare(password, user.password);
+    } else {
+      // Plain text password (old accounts) - direct compare
+      passwordValid = user.password === password;
+      
+      // If valid, upgrade to hashed password
+      if (passwordValid) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
+        console.log('✅ Upgraded password to hashed for user:', user.email);
+      }
+    }
+
+    if (!passwordValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email 
+      } 
+    });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('Login error:', e);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -562,11 +602,22 @@ app.post('/api/auth/reset-password', async (req, res) => {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Get user info for email
+    const userInfo = await pool.query('SELECT name, email FROM users WHERE id = $1', [decoded.userId]);
+    const userName = userInfo.rows[0]?.name || 'User';
+    const userEmail = userInfo.rows[0]?.email;
+
     // Update password and clear reset token
     await pool.query(
       'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
       [hashedPassword, decoded.userId]
     );
+
+    // Send confirmation email
+    if (emailService && emailService.sendPasswordChanged && userEmail) {
+      emailService.sendPasswordChanged(userEmail, userName)
+        .catch(err => console.error('Failed to send password changed email:', err));
+    }
 
     console.log('✅ Password reset successfully for user:', decoded.userId);
     res.json({ success: true, message: 'Password reset successfully' });

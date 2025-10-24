@@ -78,6 +78,66 @@ async function sendPasswordReset(to, userName, resetLink) {
   }
 }
 
+// Send password changed confirmation
+async function sendPasswordChanged(to, userName) {
+  if (!resend) {
+    console.log('⚠️  Email service not available');
+    return false;
+  }
+
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: to,
+      subject: 'Your ScheduleSync Password Was Changed',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .success-icon { font-size: 48px; text-align: center; margin-bottom: 20px; }
+            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">✅ Password Changed Successfully</h1>
+            </div>
+            <div class="content">
+              <div class="success-icon">🔐</div>
+              <p>Hi ${userName},</p>
+              <p>Your password for your ScheduleSync account has been successfully changed.</p>
+              <p><strong>When:</strong> ${new Date().toLocaleString()}</p>
+              <p style="margin-top: 30px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                <strong>⚠️ Didn't make this change?</strong><br>
+                If you didn't change your password, please contact support immediately and secure your account.
+              </p>
+              <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+                For security, you can now sign in with your new password.
+              </p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} ScheduleSync. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    });
+
+    console.log('✅ Password changed confirmation sent to:', to);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send password changed email:', error.message);
+    return false;
+  }
+}
+
 // Send booking confirmation
 async function sendBookingConfirmation(booking, team) {
   if (!resend) {
@@ -182,6 +242,7 @@ async function sendTeamWelcome(email, teamName) {
 
 module.exports = {
   sendPasswordReset,
+  sendPasswordChanged,
   sendBookingConfirmation,
   sendBookingNotificationToOwner,
   sendTeamInvitation,
