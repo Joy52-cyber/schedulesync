@@ -611,15 +611,6 @@
         </div>
     </div>
 
-    <script>
-        let currentStep = 1;
-        let selectedDate = null;
-        let selectedTime = null;
-        let teamData = null;
-        let currentMonth = new Date();
-
-// FIXED JAVASCRIPT CODE FOR book.html - With Proper Date Handling
-// Replace the script section (from line 620 onwards) with this code
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -632,9 +623,8 @@
         let currentStep = 1;
         let selectedDate = null;
         let selectedTime = null;
-        let selectedTime24 = null; // Store 24-hour format for API
+        let selectedTime24 = null;
 
-        // Load team information
         async function loadTeam() {
             try {
                 console.log('🔍 Loading team:', teamId);
@@ -661,15 +651,12 @@
                 document.getElementById('loading').innerHTML = `
                     <div class="error-message">
                         <strong>Error loading team information</strong><br><br>
-                        ${error.message}<br><br>
-                        <small>Team ID: ${teamId}</small><br>
-                        <small>URL: /api/teams/${teamId}/public</small>
+                        ${error.message}
                     </div>
                 `;
             }
         }
 
-        // Generate calendar
         function generateCalendar() {
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth();
@@ -685,14 +672,12 @@
             const container = document.getElementById('calendarDays');
             container.innerHTML = '';
 
-            // Empty cells before first day
             for (let i = 0; i < firstDay; i++) {
                 const emptyDay = document.createElement('div');
                 emptyDay.className = 'calendar-day empty';
                 container.appendChild(emptyDay);
             }
 
-            // Days of the month
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
                 const isPast = date < today;
@@ -720,19 +705,16 @@
             generateCalendar();
         }
 
-        // ✅ UPDATED: Select date and fetch available slots
         async function selectDate(dateStr) {
             selectedDate = dateStr;
-            const date = new Date(dateStr + 'T12:00:00'); // Add time to avoid timezone issues
+            const date = new Date(dateStr + 'T12:00:00');
             document.getElementById('selectedDateDisplay').textContent = 
                 date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             
-            // Fetch available slots from backend
             await fetchAvailableSlots(dateStr);
             goToStep(2);
         }
 
-        // ✅ NEW: Fetch available time slots from backend
         async function fetchAvailableSlots(date) {
             const container = document.getElementById('timeSlots');
             container.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">Loading available times...</div>';
@@ -755,7 +737,6 @@
                     return;
                 }
                 
-                // Filter only available slots
                 const availableSlots = data.slots.filter(slot => slot.available);
                 
                 if (availableSlots.length === 0) {
@@ -769,9 +750,8 @@
                     return;
                 }
                 
-                // Render available time slots
                 container.innerHTML = availableSlots.map(slot => {
-                    const time24 = slot.time; // "14:00"
+                    const time24 = slot.time;
                     const [hour, minute] = time24.split(':');
                     const hourNum = parseInt(hour);
                     const hour12 = hourNum % 12 || 12;
@@ -795,18 +775,16 @@
             }
         }
 
-        // ✅ UPDATED: Select time (now receives both 24h and 12h formats)
         function selectTime(time24, time12) {
-            selectedTime = time12; // Display format: "2:00 PM"
-            selectedTime24 = time24; // API format: "14:00"
+            selectedTime = time12;
+            selectedTime24 = time24;
             
             document.querySelectorAll('.time-slot').forEach(slot => {
                 slot.classList.remove('selected');
             });
             event.target.classList.add('selected');
 
-            // Update summary - Use proper date parsing
-            const dateObj = new Date(selectedDate + 'T12:00:00'); // Add time to avoid timezone issues
+            const dateObj = new Date(selectedDate + 'T12:00:00');
             document.getElementById('bookingSummary').innerHTML = `
                 <div class="detail-row">
                     <span class="detail-label">Date:</span>
@@ -828,29 +806,20 @@
         function goToStep(step) {
             currentStep = step;
             
-            // Hide all steps
             for (let i = 1; i <= 4; i++) {
                 document.getElementById(`step${i}`).classList.add('hidden');
                 document.getElementById(`step${i}Tab`)?.classList.remove('active');
             }
             
-            // Show current step
             document.getElementById(`step${step}`).classList.remove('hidden');
             document.getElementById(`step${step}Tab`)?.classList.add('active');
         }
 
-        // ✅ UPDATED: Submit booking with better error handling
         async function submitBooking(event) {
             event.preventDefault();
 
-            console.log('📝 Submitting booking...');
-            console.log('📝 teamData:', teamData);
-            console.log('📝 selectedDate:', selectedDate);
-            console.log('📝 selectedTime24:', selectedTime24);
-
             if (!teamData || !teamData.id) {
                 alert('Team information not loaded. Please refresh the page.');
-                console.error('❌ teamData is invalid:', teamData);
                 return;
             }
 
@@ -865,12 +834,9 @@
                 guest_email: document.getElementById('guestEmail').value,
                 guest_notes: document.getElementById('guestNotes').value || '',
                 date: selectedDate,
-                time: selectedTime24 // ✅ Use 24-hour format for API
+                time: selectedTime24
             };
 
-            console.log('📤 Booking data being sent:', bookingData);
-
-            // Disable submit button
             const submitBtn = event.target.querySelector('button[type="submit"]') || event.target;
             const originalText = submitBtn.textContent;
             submitBtn.disabled = true;
@@ -883,19 +849,11 @@
                     body: JSON.stringify(bookingData)
                 });
 
-                console.log('📡 Booking response status:', response.status);
-                
                 const result = await response.json();
-                console.log('📦 Booking response data:', result);
 
                 if (response.ok) {
-                    // Pass the booking data we sent along with the response
-                    showConfirmation({
-                        ...result,
-                        sentData: bookingData
-                    });
+                    showConfirmation({...result, sentData: bookingData});
                 } else {
-                    // ✅ Handle specific error types
                     let errorMessage = result.error || 'Failed to create booking';
                     
                     if (result.reason === 'day_unavailable') {
@@ -903,7 +861,7 @@
                     } else if (result.reason === 'time_unavailable') {
                         errorMessage = `This time is outside available hours (${result.available_hours?.start} - ${result.available_hours?.end})`;
                     } else if (result.reason === 'slot_conflict') {
-                        errorMessage = 'This time slot was just booked by someone else. Please select a different time.';
+                        errorMessage = 'This time slot was just booked. Please select a different time.';
                     }
                     
                     alert('❌ ' + errorMessage);
@@ -911,34 +869,23 @@
                     submitBtn.textContent = originalText;
                 }
             } catch (error) {
-                console.error('❌ Booking error:', error);
                 alert('Failed to create booking: ' + error.message);
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             }
         }
 
-        // ✅ FIXED: Better handling of booking confirmation data
         function showConfirmation(response) {
-            console.log('📋 Showing confirmation for:', response);
-            
-            // Extract booking data from response
             const booking = response.booking || response;
             const sentData = response.sentData || {};
             
-            // Handle both snake_case (from DB) and camelCase property names
-            // Use sent data as fallback
             const bookingDate = booking.booking_date || booking.bookingDate || sentData.date || selectedDate;
             const bookingTime = booking.booking_time || booking.bookingTime || sentData.time || selectedTime24;
             const guestName = booking.guest_name || booking.guestName || sentData.guest_name || document.getElementById('guestName').value;
             const guestEmail = booking.guest_email || booking.guestEmail || sentData.guest_email || document.getElementById('guestEmail').value;
             
-            console.log('📋 Confirmation data:', { bookingDate, bookingTime, guestName, guestEmail });
+            const dateObj = new Date(bookingDate + 'T12:00:00');
             
-            // Parse date properly
-            const dateObj = new Date(bookingDate + 'T12:00:00'); // Add time to avoid timezone issues
-            
-            // Format time for display
             let displayTime = bookingTime;
             if (bookingTime && bookingTime.includes(':')) {
                 const [hour, minute] = bookingTime.split(':');
@@ -973,9 +920,9 @@
             goToStep(4);
         }
 
-        // Initialize
         console.log('🚀 Initializing booking page...');
         loadTeam();
         generateCalendar();
     </script>
-</body></html>
+</body>
+</html>
