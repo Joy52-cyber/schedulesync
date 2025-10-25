@@ -723,9 +723,9 @@ app.get('/auth/google/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Redirect to calendar setup page
-    console.log('➡️  Redirecting to calendar setup');
-    res.redirect(`/calendar-setup?token=${token}`);
+    // Redirect to dashboard with token
+    console.log('➡️  Redirecting to dashboard');
+    res.redirect(`/dashboard?token=${token}`);
 
   } catch (error) {
     console.error('❌ OAuth callback error:', error);
