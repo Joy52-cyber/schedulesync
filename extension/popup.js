@@ -236,4 +236,9 @@ function showReturningUserView() {
         await chrome.storage.local.clear();
         window.location.reload();
     });
+    document.getElementById("openSetup").addEventListener("click", () => {
+  const url = chrome.runtime.getURL("calendar-setup.html");
+  chrome.tabs.create({ url });
+});
+
 }
