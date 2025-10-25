@@ -13,171 +13,141 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f8fafc;
-            min-height: 100vh;
-        }
-
-        .navbar {
-            background: white;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            padding: 16px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .nav-brand {
-            font-size: 24px;
-            font-weight: 700;
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 24px;
-            align-items: center;
-        }
-
-        .nav-links a {
-            color: #64748b;
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-
-        .nav-links a:hover, .nav-links a.active {
-            color: #667eea;
-        }
-
-        .user-menu {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .user-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-        }
-
-        .logout-btn {
-            padding: 8px 16px;
-            background: #f1f5f9;
-            border: none;
-            border-radius: 8px;
-            color: #334155;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .logout-btn:hover {
-            background: #e2e8f0;
+            min-height: 100vh;
+            padding: 20px;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 40px 24px;
         }
 
-        .page-header {
-            margin-bottom: 32px;
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
         }
 
-        .page-header h1 {
-            font-size: 32px;
-            color: #1e293b;
-            margin-bottom: 8px;
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 12px;
+            font-weight: 700;
         }
 
-        .page-header p {
-            color: #64748b;
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
         }
 
         .card {
             background: white;
-            border-radius: 12px;
-            padding: 32px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 20px;
-        }
-
-        .loading {
-            text-align: center;
+            border-radius: 24px;
             padding: 40px;
-            color: #64748b;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .quick-btn {
+            padding: 10px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: white;
+            color: #334155;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .quick-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(-2px);
         }
 
         .time-slots {
-            display: grid;
-            gap: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
         .time-slot {
-            display: flex;
+            display: grid;
+            grid-template-columns: 140px 1fr auto;
             align-items: center;
-            gap: 16px;
-            padding: 16px;
+            gap: 20px;
+            padding: 20px;
             background: #f8fafc;
             border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            transition: all 0.2s;
+            border-radius: 16px;
+            transition: all 0.3s;
         }
 
-        .time-slot:hover {
+        .time-slot.active {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
             border-color: #667eea;
         }
 
+        .time-slot.inactive {
+            opacity: 0.5;
+        }
+
         .day-label {
-            min-width: 100px;
-            font-weight: 600;
-            color: #334155;
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 16px;
         }
 
         .time-inputs {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
+        }
+
+        .time-input-wrapper {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .time-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .time-inputs input[type="time"] {
-            padding: 10px 12px;
+            width: 100%;
+            padding: 12px 16px;
             border: 2px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
             transition: all 0.3s;
+            background: white;
         }
 
         .time-inputs input[type="time"]:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
         }
 
         .toggle-switch {
             position: relative;
-            width: 50px;
-            height: 28px;
+            width: 60px;
+            height: 32px;
         }
 
         .toggle-switch input {
@@ -195,19 +165,20 @@
             bottom: 0;
             background-color: #cbd5e1;
             transition: 0.3s;
-            border-radius: 28px;
+            border-radius: 32px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 20px;
-            width: 20px;
+            height: 24px;
+            width: 24px;
             left: 4px;
             bottom: 4px;
             background-color: white;
             transition: 0.3s;
             border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         input:checked + .slider {
@@ -215,16 +186,33 @@
         }
 
         input:checked + .slider:before {
-            transform: translateX(22px);
+            transform: translateX(28px);
+        }
+
+        .actions {
+            margin-top: 32px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
         }
 
         .btn {
-            padding: 12px 24px;
+            padding: 14px 32px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            font-size: 16px;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
         }
 
         .btn-primary {
@@ -234,7 +222,7 @@
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
 
         .btn-primary:disabled {
@@ -243,51 +231,105 @@
             transform: none;
         }
 
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 24px;
+            padding: 10px 20px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(-4px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 768px) {
             .time-slot {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .day-label {
-                width: 100%;
+                grid-template-columns: 1fr;
+                gap: 16px;
             }
 
             .time-inputs {
-                width: 100%;
                 flex-direction: column;
             }
 
-            .nav-links {
-                display: none;
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .header h1 {
+                font-size: 32px;
+            }
+
+            .card {
+                padding: 24px;
             }
         }
     </style>
 </head>
 <body>
     <script src="/auth-handler.js"></script>
-    <nav class="navbar">
-        <a href="/" class="nav-brand">📅 ScheduleSync</a>
-        <div class="nav-links">
-            <a href="/dashboard">Dashboard</a>
-            <a href="/teams">Teams</a>
-            <a href="/availability" class="active">Availability</a>
-            <a href="/bookings">Bookings</a>
-        </div>
-        <div class="user-menu">
-            <div class="user-avatar" id="userAvatar">U</div>
-            <button class="logout-btn" onclick="logout()">Logout</button>
-        </div>
-    </nav>
-
+    
     <div class="container">
-        <div class="page-header">
-            <h1>Set Your Availability</h1>
+        <a href="/dashboard" class="back-btn">
+            ← Back to Dashboard
+        </a>
+
+        <div class="header">
+            <h1>⏰ Set Your Availability</h1>
             <p>Define when you're available for meetings</p>
         </div>
 
-        <div class="card" id="availabilityCard">
-            <div class="loading">Loading your availability...</div>
+        <div class="card">
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="setWorkWeek()">📅 Work Week (Mon-Fri 9-5)</button>
+                <button class="quick-btn" onclick="setAllDays()">✅ Enable All Days</button>
+                <button class="quick-btn" onclick="clearAll()">❌ Clear All</button>
+            </div>
+
+            <div id="content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading your availability...</p>
+                </div>
+            </div>
+
+            <div class="actions" id="actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Cancel</button>
+                <button class="btn btn-primary" onclick="saveAvailability()">Save Availability</button>
+            </div>
         </div>
     </div>
 
@@ -296,10 +338,6 @@
         const user = JSON.parse(localStorage.getItem('user') || '{}');
 
         if (!token) window.location.href = '/login';
-
-        if (user.name) {
-            document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
-        }
 
         const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const dayShortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -325,31 +363,33 @@
         }
 
         function renderAvailability(existingSlots) {
-            const card = document.getElementById('availabilityCard');
-            
-            let html = '<h2 class="section-title">Weekly Schedule</h2><div class="time-slots">';
+            let html = '<div class="time-slots">';
 
             dayNames.forEach((dayName, index) => {
                 const dayShort = dayShortNames[index];
-                const dayOfWeek = index + 1; // 1 = Monday
+                const dayOfWeek = index + 1;
 
-                // Find existing slot for this day
                 const existingSlot = existingSlots.find(s => s.day_of_week === dayOfWeek);
                 
                 const startTime = existingSlot ? existingSlot.start_time : (index < 5 ? '09:00' : '10:00');
                 const endTime = existingSlot ? existingSlot.end_time : (index < 5 ? '17:00' : '14:00');
-                const isEnabled = !!existingSlot || index < 5; // Enable Mon-Fri by default
+                const isEnabled = !!existingSlot || index < 5;
 
                 html += `
-                    <div class="time-slot">
+                    <div class="time-slot ${isEnabled ? 'active' : 'inactive'}" id="slot-${dayShort}">
                         <div class="day-label">${dayName}</div>
                         <div class="time-inputs">
-                            <input type="time" id="${dayShort}-start" value="${startTime}">
-                            <span>to</span>
-                            <input type="time" id="${dayShort}-end" value="${endTime}">
+                            <div class="time-input-wrapper">
+                                <div class="time-label">Start</div>
+                                <input type="time" id="${dayShort}-start" value="${startTime}">
+                            </div>
+                            <div class="time-input-wrapper">
+                                <div class="time-label">End</div>
+                                <input type="time" id="${dayShort}-end" value="${endTime}">
+                            </div>
                         </div>
                         <label class="toggle-switch">
-                            <input type="checkbox" id="${dayShort}-enabled" ${isEnabled ? 'checked' : ''}>
+                            <input type="checkbox" id="${dayShort}-enabled" ${isEnabled ? 'checked' : ''} onchange="toggleSlot('${dayShort}')">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -357,9 +397,53 @@
             });
 
             html += '</div>';
-            html += '<div style="margin-top: 24px;"><button class="btn btn-primary" onclick="saveAvailability()">Save Availability</button></div>';
+            document.getElementById('content').innerHTML = html;
+            document.getElementById('actions').style.display = 'flex';
+        }
 
-            card.innerHTML = html;
+        function toggleSlot(day) {
+            const slot = document.getElementById(`slot-${day}`);
+            const checkbox = document.getElementById(`${day}-enabled`);
+            
+            if (checkbox.checked) {
+                slot.classList.remove('inactive');
+                slot.classList.add('active');
+            } else {
+                slot.classList.remove('active');
+                slot.classList.add('inactive');
+            }
+        }
+
+        function setWorkWeek() {
+            dayShortNames.forEach((day, index) => {
+                const checkbox = document.getElementById(`${day}-enabled`);
+                const startInput = document.getElementById(`${day}-start`);
+                const endInput = document.getElementById(`${day}-end`);
+                
+                if (index < 5) { // Mon-Fri
+                    checkbox.checked = true;
+                    startInput.value = '09:00';
+                    endInput.value = '17:00';
+                    toggleSlot(day);
+                } else {
+                    checkbox.checked = false;
+                    toggleSlot(day);
+                }
+            });
+        }
+
+        function setAllDays() {
+            dayShortNames.forEach((day) => {
+                document.getElementById(`${day}-enabled`).checked = true;
+                toggleSlot(day);
+            });
+        }
+
+        function clearAll() {
+            dayShortNames.forEach((day) => {
+                document.getElementById(`${day}-enabled`).checked = false;
+                toggleSlot(day);
+            });
         }
 
         async function saveAvailability() {
@@ -376,6 +460,10 @@
                 }
             });
 
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
             try {
                 const response = await fetch('/api/availability', {
                     method: 'POST',
@@ -387,23 +475,24 @@
                 });
 
                 if (response.ok) {
-                    alert('✅ Availability saved successfully!');
+                    btn.textContent = '✅ Saved!';
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
                 } else {
                     const data = await response.json();
                     alert('❌ Failed to save: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = 'Save Availability';
                 }
             } catch (error) {
                 console.error('Error saving availability:', error);
                 alert('❌ Error saving availability');
+                btn.disabled = false;
+                btn.textContent = 'Save Availability';
             }
         }
 
-        function logout() {
-            localStorage.clear();
-            window.location.href = '/login';
-        }
-
-        // Load availability on page load
         loadAvailability();
     </script>
 </body>
