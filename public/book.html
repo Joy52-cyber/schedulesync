@@ -844,32 +844,43 @@
                 alert('Failed to create booking: ' + error.message);
             }
         }
-
-        function showConfirmation(data) {
-            const date = new Date(data.bookingDate);
-            document.getElementById('confirmationDetails').innerHTML = `
-                <div class="detail-row">
-                    <span class="detail-label">Team:</span>
-                    <span class="detail-value">${teamData.name}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Date:</span>
-                    <span class="detail-value">${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Time:</span>
-                    <span class="detail-value">${data.bookingTime}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Name:</span>
-                    <span class="detail-value">${data.guestName}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Email:</span>
-                    <span class="detail-value">${data.guestEmail}</span>
-                </div>
-            `;
-            goToStep(4);
+        function showConfirmation(response) {
+    // Extract booking data from response
+    const booking = response.booking || response;
+    
+    // Handle both snake_case (from DB) and camelCase property names
+    const bookingDate = booking.booking_date || booking.bookingDate;
+    const bookingTime = booking.booking_time || booking.bookingTime;
+    const guestName = booking.guest_name || booking.guestName;
+    const guestEmail = booking.guest_email || booking.guestEmail;
+    
+    const date = new Date(bookingDate);
+    
+    document.getElementById('confirmationDetails').innerHTML = `
+        <div class="detail-row">
+            <span class="detail-label">Team:</span>
+            <span class="detail-value">${teamData.name}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Date:</span>
+            <span class="detail-value">${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Time:</span>
+            <span class="detail-value">${bookingTime}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Name:</span>
+            <span class="detail-value">${guestName}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Email:</span>
+            <span class="detail-value">${guestEmail}</span>
+        </div>
+    `;
+    goToStep(4);
+}
+        
         }
 
         // Initialize
