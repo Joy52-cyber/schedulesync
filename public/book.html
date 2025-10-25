@@ -634,7 +634,7 @@
                 console.log('📦 Team response:', data);
                 
                 if (response.ok && data) {
-                    teamData = data;
+                    teamData = data.team || data; // Handle both {team: {...}} and {...} formats
                     console.log('✅ Team ID:', teamData.id);
                     console.log('✅ Team Name:', teamData.name);
                     
