@@ -74,6 +74,39 @@ console.log(`  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET ? '✅ Found' 
 console.log(`  MICROSOFT_CALLBACK_URL:  ${MICROSOFT_CALLBACK_URL ? '✅ Found' : '❌ Missing'}`);
 console.log();
 
+
+/* ======================== HEALTH CHECK FOR RAILWAY ======================== */
+// Health check endpoint - Railway needs this to verify deployment
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    app: 'ScheduleSync',
+    version: '1.0.0',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    database: dbReady ? 'connected' : 'initializing'
+  });
+});
+
+// Root endpoint - Basic API info
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'ScheduleSync API',
+    version: '1.0.0',
+    status: 'running',
+    database: dbReady ? 'connected' : 'initializing',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      teams: '/api/teams',
+      bookings: '/api/bookings',
+      availability: '/api/availability',
+      calendar: '/api/calendar/*'
+    },
+    documentation: 'https://github.com/yourusername/schedulesync'
+  });
+});
+
 /* ------------------------------ DB Bootstrap ------------------------------ */
 let dbReady = false;
 
@@ -2247,5 +2280,4 @@ function shutdown(sig) {
   server.close(() => process.exit(0));
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM')); 
- 
+process.on('SIGTERM', () => shutdown('SIGTERM'));
