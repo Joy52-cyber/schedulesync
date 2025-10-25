@@ -74,39 +74,6 @@ console.log(`  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET ? '✅ Found' 
 console.log(`  MICROSOFT_CALLBACK_URL:  ${MICROSOFT_CALLBACK_URL ? '✅ Found' : '❌ Missing'}`);
 console.log();
 
-
-/* ======================== HEALTH CHECK FOR RAILWAY ======================== */
-// Health check endpoint - Railway needs this to verify deployment
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy',
-    app: 'ScheduleSync',
-    version: '1.0.0',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    database: dbReady ? 'connected' : 'initializing'
-  });
-});
-
-// Root endpoint - Basic API info
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'ScheduleSync API',
-    version: '1.0.0',
-    status: 'running',
-    database: dbReady ? 'connected' : 'initializing',
-    endpoints: {
-      health: '/health',
-      auth: '/api/auth/*',
-      teams: '/api/teams',
-      bookings: '/api/bookings',
-      availability: '/api/availability',
-      calendar: '/api/calendar/*'
-    },
-    documentation: 'https://github.com/yourusername/schedulesync'
-  });
-});
-
 /* ------------------------------ DB Bootstrap ------------------------------ */
 let dbReady = false;
 
@@ -1387,11 +1354,18 @@ app.post('/api/availability', authenticateToken, async (req, res) => {
     const userId = req.userId;
     const { slots, team_id } = req.body;
 
+    console.log('📅 AVAILABILITY SAVE REQUEST');
+    console.log('   User ID:', userId);
+    console.log('   Slots received:', JSON.stringify(slots, null, 2));
+    console.log('   Team ID:', team_id || 'none');
+
     // Delete existing slots for this user/team
     if (team_id) {
-      await pool.query('DELETE FROM time_slots WHERE team_id = $1', [team_id]);
+      const deleteResult = await pool.query('DELETE FROM time_slots WHERE team_id = $1', [team_id]);
+      console.log('   Deleted', deleteResult.rowCount, 'existing team slots');
     } else {
-      await pool.query('DELETE FROM time_slots WHERE user_id = $1', [userId]);
+      const deleteResult = await pool.query('DELETE FROM time_slots WHERE user_id = $1', [userId]);
+      console.log('   Deleted', deleteResult.rowCount, 'existing user slots');
     }
 
     // Insert new slots
@@ -1404,11 +1378,15 @@ app.post('/api/availability', authenticateToken, async (req, res) => {
         )
       );
       await Promise.all(insertPromises);
+      console.log('   ✅ Inserted', slots.length, 'new slots');
+    } else {
+      console.log('   ⚠️ No slots to insert');
     }
 
+    console.log('   ✅ AVAILABILITY SAVED SUCCESSFULLY');
     res.json({ success: true, message: 'Availability saved' });
   } catch (error) {
-    console.error('Error saving availability:', error);
+    console.error('❌ Error saving availability:', error);
     res.status(500).json({ error: 'Failed to save availability' });
   }
 });
