@@ -121,16 +121,10 @@
             margin-bottom: 20px;
         }
 
-        .form-group {
-            margin-bottom: 24px;
-        }
-
-        .form-group label {
-            display: block;
-            color: #334155;
-            font-weight: 600;
-            margin-bottom: 12px;
-            font-size: 15px;
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
         }
 
         .time-slots {
@@ -249,18 +243,6 @@
             transform: none;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #64748b;
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
         @media (max-width: 768px) {
             .time-slot {
                 flex-direction: column;
@@ -283,6 +265,7 @@
     </style>
 </head>
 <body>
+    <script src="/auth-handler.js"></script>
     <nav class="navbar">
         <a href="/" class="nav-brand">📅 ScheduleSync</a>
         <div class="nav-links">
@@ -303,105 +286,8 @@
             <p>Define when you're available for meetings</p>
         </div>
 
-        <div class="card">
-            <h2 class="section-title">Weekly Schedule</h2>
-            
-            <div class="time-slots">
-                <div class="time-slot">
-                    <div class="day-label">Monday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="mon-start" value="09:00">
-                        <span>to</span>
-                        <input type="time" id="mon-end" value="17:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="mon-enabled" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Tuesday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="tue-start" value="09:00">
-                        <span>to</span>
-                        <input type="time" id="tue-end" value="17:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="tue-enabled" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Wednesday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="wed-start" value="09:00">
-                        <span>to</span>
-                        <input type="time" id="wed-end" value="17:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="wed-enabled" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Thursday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="thu-start" value="09:00">
-                        <span>to</span>
-                        <input type="time" id="thu-end" value="17:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="thu-enabled" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Friday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="fri-start" value="09:00">
-                        <span>to</span>
-                        <input type="time" id="fri-end" value="17:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="fri-enabled" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Saturday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="sat-start" value="10:00">
-                        <span>to</span>
-                        <input type="time" id="sat-end" value="14:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="sat-enabled">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="time-slot">
-                    <div class="day-label">Sunday</div>
-                    <div class="time-inputs">
-                        <input type="time" id="sun-start" value="10:00">
-                        <span>to</span>
-                        <input type="time" id="sun-end" value="14:00">
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="sun-enabled">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div style="margin-top: 24px;">
-                <button class="btn btn-primary" onclick="saveAvailability()">Save Availability</button>
-            </div>
+        <div class="card" id="availabilityCard">
+            <div class="loading">Loading your availability...</div>
         </div>
     </div>
 
@@ -415,11 +301,71 @@
             document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
         }
 
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayShortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+        // Load existing availability
+        async function loadAvailability() {
+            try {
+                const response = await fetch('/api/availability', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                let existingSlots = [];
+                if (response.ok) {
+                    const data = await response.json();
+                    existingSlots = data.slots || [];
+                }
+
+                renderAvailability(existingSlots);
+            } catch (error) {
+                console.error('Error loading availability:', error);
+                renderAvailability([]);
+            }
+        }
+
+        function renderAvailability(existingSlots) {
+            const card = document.getElementById('availabilityCard');
+            
+            let html = '<h2 class="section-title">Weekly Schedule</h2><div class="time-slots">';
+
+            dayNames.forEach((dayName, index) => {
+                const dayShort = dayShortNames[index];
+                const dayOfWeek = index + 1; // 1 = Monday
+
+                // Find existing slot for this day
+                const existingSlot = existingSlots.find(s => s.day_of_week === dayOfWeek);
+                
+                const startTime = existingSlot ? existingSlot.start_time : (index < 5 ? '09:00' : '10:00');
+                const endTime = existingSlot ? existingSlot.end_time : (index < 5 ? '17:00' : '14:00');
+                const isEnabled = !!existingSlot || index < 5; // Enable Mon-Fri by default
+
+                html += `
+                    <div class="time-slot">
+                        <div class="day-label">${dayName}</div>
+                        <div class="time-inputs">
+                            <input type="time" id="${dayShort}-start" value="${startTime}">
+                            <span>to</span>
+                            <input type="time" id="${dayShort}-end" value="${endTime}">
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="${dayShort}-enabled" ${isEnabled ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            html += '<div style="margin-top: 24px;"><button class="btn btn-primary" onclick="saveAvailability()">Save Availability</button></div>';
+
+            card.innerHTML = html;
+        }
+
         async function saveAvailability() {
-            const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
             const availability = [];
 
-            days.forEach((day, index) => {
+            dayShortNames.forEach((day, index) => {
                 const enabled = document.getElementById(`${day}-enabled`).checked;
                 if (enabled) {
                     availability.push({
@@ -441,13 +387,14 @@
                 });
 
                 if (response.ok) {
-                    alert('Availability saved successfully!');
+                    alert('✅ Availability saved successfully!');
                 } else {
-                    alert('Failed to save availability');
+                    const data = await response.json();
+                    alert('❌ Failed to save: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error saving availability:', error);
-                alert('Error saving availability');
+                alert('❌ Error saving availability');
             }
         }
 
@@ -455,6 +402,9 @@
             localStorage.clear();
             window.location.href = '/login';
         }
+
+        // Load availability on page load
+        loadAvailability();
     </script>
 </body>
 </html>
