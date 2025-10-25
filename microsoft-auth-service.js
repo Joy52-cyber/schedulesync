@@ -1946,11 +1946,6 @@ app.post('/api/calendar/microsoft/disconnect', authenticateToken, async (req, re
 /* --------------------------------- 404 ------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
-/* ------------------------------- Start Server ----------------------------- */
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server listening on http://0.0.0.0:${PORT}`);
-  console.log('✅ ScheduleSync API Running\n');
-});
 
 /* ---------------------------- Graceful Shutdown --------------------------- */
 function shutdown(sig) {
