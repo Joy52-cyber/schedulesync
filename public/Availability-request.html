@@ -1,0 +1,488 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Your Availability - ScheduleSync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 18px;
+            color: #6b7280;
+        }
+
+        .info-box {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .info-box h3 {
+            color: #374151;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .info-box p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .time-slot {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+
+        .time-slot.active {
+            border-color: #667eea;
+            background: #f5f3ff;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .day-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 32px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 32px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 24px;
+            width: 24px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(28px);
+        }
+
+        .time-inputs {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .time-group {
+            flex: 1;
+        }
+
+        .time-group label {
+            display: block;
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .time-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .time-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .time-group input:disabled {
+            background: #f3f4f6;
+            cursor: not-allowed;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 16px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee2e2;
+            border: 2px solid #fecaca;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d1fae5;
+            border: 2px solid #a7f3d0;
+            color: #065f46;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .success h3 {
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .quick-btn {
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading availability request...</p>
+        </div>
+
+        <div id="mainContent" class="hidden">
+            <div class="header">
+                <h1>📅 Submit Your Availability</h1>
+                <p class="subtitle" id="teamName">Loading...</p>
+            </div>
+
+            <div class="info-box">
+                <h3>👋 Hi <span id="guestName"></span>!</h3>
+                <p id="instructions">
+                    Please select the times when you're available for a meeting. 
+                    <span id="ownerName"></span> will see when both of your schedules align and book a suitable time.
+                </p>
+            </div>
+
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="setWorkWeek()">🗓️ Work Week (Mon-Fri 9-5)</button>
+                <button class="quick-btn" onclick="setAllDay()">📆 Enable All Days</button>
+                <button class="quick-btn" onclick="clearAll()">❌ Clear All</button>
+            </div>
+
+            <div id="availabilityForm">
+                <!-- Days will be inserted here -->
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="submitAvailability()">
+                    ✅ Submit My Availability
+                </button>
+            </div>
+        </div>
+
+        <div id="successMessage" class="hidden">
+            <div class="success">
+                <h3>✅ Availability Submitted Successfully!</h3>
+                <p><span id="overlapCount">0</span> time slots found where both of you are available.</p>
+                <p style="margin-top: 16px; color: #059669;">
+                    <strong id="ownerName2"></strong> will review the available times and confirm the final booking.
+                    You'll receive an email confirmation once a time is selected.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = window.location.pathname.split('/').pop();
+        let requestData = null;
+
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayShortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+        async function loadRequest() {
+            try {
+                const response = await fetch(`/api/availability-requests/${token}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load request');
+                }
+
+                requestData = data;
+
+                document.getElementById('teamName').textContent = data.request.team_name;
+                document.getElementById('guestName').textContent = data.request.guest_name;
+                document.getElementById('ownerName').textContent = data.request.owner_name;
+                document.getElementById('ownerName2').textContent = data.request.owner_name;
+
+                renderAvailabilityForm();
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('mainContent').classList.remove('hidden');
+            } catch (error) {
+                document.getElementById('loading').innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderAvailabilityForm() {
+            const container = document.getElementById('availabilityForm');
+            let html = '';
+
+            dayNames.forEach((dayName, index) => {
+                const dayShort = dayShortNames[index];
+                
+                html += `
+                    <div class="time-slot" id="slot-${dayShort}">
+                        <div class="day-header">
+                            <span class="day-label">${dayName}</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="${dayShort}-enabled" onchange="toggleDay('${dayShort}')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="time-inputs">
+                            <div class="time-group">
+                                <label>START</label>
+                                <input type="time" id="${dayShort}-start" value="09:00" disabled>
+                            </div>
+                            <div class="time-group">
+                                <label>END</label>
+                                <input type="time" id="${dayShort}-end" value="17:00" disabled>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function toggleDay(dayShort) {
+            const enabled = document.getElementById(`${dayShort}-enabled`).checked;
+            const startInput = document.getElementById(`${dayShort}-start`);
+            const endInput = document.getElementById(`${dayShort}-end`);
+            const slot = document.getElementById(`slot-${dayShort}`);
+
+            startInput.disabled = !enabled;
+            endInput.disabled = !enabled;
+
+            if (enabled) {
+                slot.classList.add('active');
+            } else {
+                slot.classList.remove('active');
+            }
+        }
+
+        function setWorkWeek() {
+            ['mon', 'tue', 'wed', 'thu', 'fri'].forEach(day => {
+                document.getElementById(`${day}-enabled`).checked = true;
+                document.getElementById(`${day}-start`).value = '09:00';
+                document.getElementById(`${day}-end`).value = '17:00';
+                toggleDay(day);
+            });
+        }
+
+        function setAllDay() {
+            dayShortNames.forEach(day => {
+                document.getElementById(`${day}-enabled`).checked = true;
+                toggleDay(day);
+            });
+        }
+
+        function clearAll() {
+            dayShortNames.forEach(day => {
+                document.getElementById(`${day}-enabled`).checked = false;
+                toggleDay(day);
+            });
+        }
+
+        async function submitAvailability() {
+            const slots = [];
+
+            dayShortNames.forEach((dayShort, index) => {
+                const enabled = document.getElementById(`${dayShort}-enabled`).checked;
+                if (enabled) {
+                    const startTime = document.getElementById(`${dayShort}-start`).value;
+                    const endTime = document.getElementById(`${dayShort}-end`).value;
+
+                    if (startTime >= endTime) {
+                        alert(`Invalid time range for ${dayNames[index]}. End time must be after start time.`);
+                        return;
+                    }
+
+                    slots.push({
+                        day_of_week: index + 1,
+                        start_time: startTime,
+                        end_time: endTime
+                    });
+                }
+            });
+
+            if (slots.length === 0) {
+                alert('Please select at least one day with availability');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/availability-requests/${token}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slots })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to submit availability');
+                }
+
+                document.getElementById('overlapCount').textContent = data.overlap_count;
+                document.getElementById('mainContent').classList.add('hidden');
+                document.getElementById('successMessage').classList.remove('hidden');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        loadRequest();
+    </script>
+</body>
+</html>

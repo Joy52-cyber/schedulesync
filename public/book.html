@@ -834,7 +834,7 @@
                 guest_email: document.getElementById('guestEmail').value,
                 guest_notes: document.getElementById('guestNotes').value || '',
                 date: selectedDate,
-                time: selectedTime24
+                time: selectedTime24 // Send 24-hour format (e.g., "16:00")
             };
 
             const submitBtn = event.target.querySelector('button[type="submit"]') || event.target;
