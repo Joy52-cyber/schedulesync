@@ -1307,6 +1307,69 @@ async function handleBookingSubmission(req, res) {
       return res.status(400).json({ error: 'Invalid date/time format' });
     }
     
+
+    // ===================== VALIDATE AVAILABILITY =====================
+    console.log('📅 Validating availability for date:', date, 'time:', time);
+    
+    // Get Day of Week
+    const bookingDate = new Date(date);
+    const dayOfWeek = bookingDate.getDay();
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+    
+    // Check if owner has availability set for this day
+    const availabilityResult = await pool.query(
+      'SELECT * FROM time_slots WHERE user_id = $1 AND day_of_week = $2',
+      [team.owner_id, adjustedDayOfWeek]
+    );
+    
+    if (availabilityResult.rows.length === 0) {
+      console.log('❌ No availability set for this day');
+      return res.status(400).json({ 
+        error: 'The selected day is not available for bookings',
+        reason: 'day_unavailable'
+      });
+    }
+    
+    const availability = availabilityResult.rows[0];
+    console.log('✅ Found availability:', availability.start_time, '-', availability.end_time);
+    
+    // Check if time is within available hours
+    const [reqHour, reqMin] = time.split(':').map(Number);
+    const requestedMinutes = reqHour * 60 + reqMin;
+    const [startHour, startMin] = availability.start_time.split(':').map(Number);
+    const [endHour, endMin] = availability.end_time.split(':').map(Number);
+    const availStartMinutes = startHour * 60 + startMin;
+    const availEndMinutes = endHour * 60 + endMin;
+    const requestedEndMinutes = requestedMinutes + 60; // 1 hour booking
+    
+    if (requestedMinutes < availStartMinutes || requestedEndMinutes > availEndMinutes) {
+      console.log('❌ Time outside available hours');
+      return res.status(400).json({ 
+        error: `Requested time is outside available hours (${availability.start_time} - ${availability.end_time})`,
+        reason: 'time_unavailable',
+        available_hours: {
+          start: availability.start_time,
+          end: availability.end_time
+        }
+      });
+    }
+    
+    // Check for booking conflicts
+    const conflictResult = await pool.query(
+      'SELECT * FROM bookings WHERE team_id = $1 AND booking_date = $2 AND booking_time = $3 AND status != $4',
+      [numericTeamId, date, time, 'cancelled']
+    );
+    
+    if (conflictResult.rows.length > 0) {
+      console.log('❌ Time slot already booked');
+      return res.status(409).json({ 
+        error: 'This time slot is already booked',
+        reason: 'slot_conflict'
+      });
+    }
+    
+    console.log('✅ All validations passed - creating booking');
+
     // Create booking with the numeric team ID and slot timestamps
     const result = await pool.query(
       `INSERT INTO bookings 
@@ -1405,6 +1468,127 @@ app.get('/api/availability', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch availability' });
   }
 });
+
+/* ------------------------- Get Available Slots -------------------------- */
+
+// Get available time slots for a team on a specific date (public - no auth required)
+app.get('/api/teams/:teamId/available-slots', async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date parameter is required' });
+    }
+    
+    console.log('🔍 Getting available slots for team:', teamId, 'date:', date);
+    
+    // Find Team
+    const isNumeric = /^\d+$/.test(String(teamId));
+    let teamResult;
+    
+    if (isNumeric) {
+      teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [parseInt(teamId)]);
+    } else {
+      teamResult = await pool.query('SELECT * FROM teams WHERE public_url = $1', [teamId]);
+    }
+    
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    
+    const team = teamResult.rows[0];
+    
+    // Get Day of Week (0=Sunday, 6=Saturday -> Convert to 1-7 where 1=Monday, 7=Sunday)
+    const bookingDate = new Date(date);
+    const dayOfWeek = bookingDate.getDay();
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+    
+    console.log('📅 Day of week:', adjustedDayOfWeek, '(', ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek], ')');
+    
+    // Check Availability
+    const availabilityResult = await pool.query(
+      'SELECT * FROM time_slots WHERE user_id = $1 AND day_of_week = $2',
+      [team.owner_id, adjustedDayOfWeek]
+    );
+    
+    if (availabilityResult.rows.length === 0) {
+      console.log('❌ No availability set for this day');
+      return res.json({ 
+        available: false, 
+        slots: [],
+        message: 'No availability on this day'
+      });
+    }
+    
+    const availability = availabilityResult.rows[0];
+    console.log('✅ Found availability:', availability.start_time, '-', availability.end_time);
+    
+    // Generate Time Slots (1 hour duration)
+    const slots = [];
+    const [startHour, startMin] = availability.start_time.split(':').map(Number);
+    const [endHour, endMin] = availability.end_time.split(':').map(Number);
+    
+    const slotDuration = 60; // 1 hour slots
+    let currentMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    while (currentMinutes + slotDuration <= endMinutes) {
+      const hour = Math.floor(currentMinutes / 60);
+      const min = currentMinutes % 60;
+      const timeString = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      
+      slots.push({
+        time: timeString,
+        available: true
+      });
+      
+      currentMinutes += slotDuration;
+    }
+    
+    console.log('📋 Generated', slots.length, 'potential slots');
+    
+    // Check Existing Bookings
+    const bookingsResult = await pool.query(
+      `SELECT booking_time FROM bookings 
+       WHERE team_id = $1 
+       AND booking_date = $2
+       AND status != 'cancelled'`,
+      [team.id, date]
+    );
+    
+    const bookedTimes = new Set(bookingsResult.rows.map(b => b.booking_time));
+    console.log('📅 Already booked times:', Array.from(bookedTimes));
+    
+    // Mark booked slots as unavailable
+    slots.forEach(slot => {
+      if (bookedTimes.has(slot.time)) {
+        slot.available = false;
+      }
+    });
+    
+    const availableCount = slots.filter(s => s.available).length;
+    console.log('✅ Available slots:', availableCount, '/', slots.length);
+    
+    res.json({
+      available: true,
+      date: date,
+      dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek],
+      availableHours: {
+        start: availability.start_time,
+        end: availability.end_time
+      },
+      slots: slots,
+      totalSlots: slots.length,
+      availableSlots: availableCount
+    });
+    
+  } catch (error) {
+    console.error('Error fetching available slots:', error);
+    res.status(500).json({ error: 'Failed to fetch available slots' });
+  }
+});
+
 
 /* ------------------------- Get Team Bookings -------------------------- */
 
