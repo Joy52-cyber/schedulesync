@@ -1,307 +1,166 @@
-﻿// ============================================================================
-// ScheduleSync API Server - Final Version
-// Google OAuth Fixed + Microsoft OAuth Support
-// ============================================================================
-
-require('dotenv').config();
-
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const { Pool } = require('pg');
 const path = require('path');
 
-// ============================================================================
-// SERVICES
-// ============================================================================
+// Load services
+let googleAuth, microsoftAuth, emailService;
+try { googleAuth = require('./google-auth-service'); console.log('✅ Google Auth loaded'); } catch (e) { console.log('ℹ️  Google Auth not found'); }
+try { microsoftAuth = require('./microsoft-auth-service'); console.log('✅ Microsoft Auth loaded'); } catch (e) { console.log('ℹ️  Microsoft Auth not found'); }
+try { emailService = require('./email-service'); console.log('✅ Email service loaded'); } catch (e) { console.log('ℹ️  Email service not found'); }
 
-let googleAuth = null;
-try {
-  googleAuth = require('./google-auth-service');
-  console.log('✅ Google Auth service loaded');
-} catch (error) {
-  console.log('⚠️  Google Auth service not found');
-}
-
-let microsoftAuth = null;
-try {
-  microsoftAuth = require('./microsoft-auth-service');
-  console.log('✅ Microsoft Auth service loaded');
-} catch (error) {
-  console.log('ℹ️  Microsoft Auth service not found');
-}
-
-let emailService = null;
-try {
-  emailService = require('./email-service');
-  console.log('✅ Email service loaded');
-} catch (error) {
-  console.log('ℹ️  Email service not found');
-}
-
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
+// Config
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = '0.0.0.0';
-const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-2025';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Database connection
+// Database
 const pool = new Pool({
   connectionString: process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// ============================================================================
-// EXPRESS APP SETUP
-// ============================================================================
-
+// Express app
 const app = express();
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // 🔥 CRITICAL for OAuth!
-
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true,
-}));
-
+app.use(cookieParser());
+app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ============================================================================
-// DATABASE INITIALIZATION
-// ============================================================================
-
-async function initDatabase() {
-  try {
-    await pool.query('SELECT 1');
-    
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255),
-        google_id VARCHAR(255),
-        google_access_token TEXT,
-        google_refresh_token TEXT,
-        microsoft_id VARCHAR(255),
-        microsoft_access_token TEXT,
-        microsoft_refresh_token TEXT,
-        profile_picture TEXT,
-        timezone VARCHAR(100) DEFAULT 'UTC',
-        reset_token VARCHAR(255),
-        reset_token_expiry TIMESTAMP,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS bookings (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
-        start_time TIMESTAMP NOT NULL,
-        end_time TIMESTAMP NOT NULL,
-        attendee_email VARCHAR(255),
-        attendee_name VARCHAR(255),
-        meet_link TEXT,
-        calendar_event_id TEXT,
-        calendar_provider VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'confirmed',
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS calendar_integrations (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        provider VARCHAR(50) NOT NULL,
-        calendar_id VARCHAR(255) NOT NULL,
-        calendar_name VARCHAR(255),
-        is_primary BOOLEAN DEFAULT false,
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(user_id, provider, calendar_id)
-      )
-    `);
-
-    console.log('✅ Database schema initialized');
-  } catch (error) {
-    console.error('❌ Database initialization error:', error.message);
-    process.exit(1);
-  }
+// Init database
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255) UNIQUE NOT NULL,
+      password VARCHAR(255), google_id VARCHAR(255), google_access_token TEXT, google_refresh_token TEXT,
+      microsoft_id VARCHAR(255), microsoft_access_token TEXT, microsoft_refresh_token TEXT,
+      profile_picture TEXT, timezone VARCHAR(100) DEFAULT 'UTC',
+      reset_token VARCHAR(255), reset_token_expiry TIMESTAMP, created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL, description TEXT, start_time TIMESTAMP NOT NULL, end_time TIMESTAMP NOT NULL,
+      attendee_email VARCHAR(255), attendee_name VARCHAR(255), meet_link TEXT,
+      calendar_event_id TEXT, calendar_provider VARCHAR(50), status VARCHAR(50) DEFAULT 'confirmed',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS calendar_integrations (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      provider VARCHAR(50) NOT NULL, calendar_id VARCHAR(255) NOT NULL, calendar_name VARCHAR(255),
+      is_primary BOOLEAN DEFAULT false, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user_id, provider, calendar_id)
+    )
+  `);
+  console.log('✅ Database ready');
 }
 
-// ============================================================================
-// AUTHENTICATION MIDDLEWARE
-// ============================================================================
-
-function authenticateToken(req, res, next) {
+// Auth middleware
+function auth(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Authentication required' });
-
+  if (!token) return res.status(401).json({ error: 'Auth required' });
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid token' });
   }
 }
 
-// ============================================================================
-// GOOGLE OAUTH ROUTES
-// ============================================================================
-
+// Google OAuth
 app.get('/auth/google', (req, res) => {
-  if (!googleAuth) return res.status(501).json({ error: 'Google OAuth not configured' });
-  try {
-    const authUrl = googleAuth.getAuthUrl();
-    res.redirect(authUrl);
-  } catch (error) {
-    console.error('❌ Error generating Google auth URL:', error);
-    res.redirect('/login?error=oauth_config_error');
-  }
+  if (!googleAuth) return res.status(501).json({ error: 'Not configured' });
+  res.redirect(googleAuth.getAuthUrl());
 });
 
 app.get('/auth/google/callback', async (req, res) => {
   const { code, error } = req.query;
-  
   if (error || !code) return res.redirect('/login?error=oauth_failed');
-
   try {
     const tokens = await googleAuth.getTokensFromCode(code);
     const userInfo = await googleAuth.getUserInfo(tokens.access_token);
-
-    let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
+    let result = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
     let user;
-
-    if (userResult.rows.length > 0) {
-      const updateResult = await pool.query(
-        `UPDATE users SET google_id = $1, google_access_token = $2, google_refresh_token = COALESCE($3, google_refresh_token),
-         name = $4, profile_picture = $5 WHERE email = $6 RETURNING id, name, email, profile_picture`,
+    if (result.rows.length > 0) {
+      result = await pool.query(
+        `UPDATE users SET google_id=$1, google_access_token=$2, google_refresh_token=COALESCE($3,google_refresh_token), name=$4, profile_picture=$5 WHERE email=$6 RETURNING *`,
         [userInfo.google_id, tokens.access_token, tokens.refresh_token, userInfo.name, userInfo.picture, userInfo.email]
       );
-      user = updateResult.rows[0];
-      console.log('✅ Google OAuth: User updated', user.id);
+      user = result.rows[0];
     } else {
-      const insertResult = await pool.query(
-        `INSERT INTO users (name, email, google_id, google_access_token, google_refresh_token, profile_picture)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, profile_picture`,
+      result = await pool.query(
+        `INSERT INTO users (name, email, google_id, google_access_token, google_refresh_token, profile_picture) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
         [userInfo.name, userInfo.email, userInfo.google_id, tokens.access_token, tokens.refresh_token, userInfo.picture]
       );
-      user = insertResult.rows[0];
-      console.log('✅ Google OAuth: New user created', user.id);
+      user = result.rows[0];
     }
-
-    const jwtToken = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.cookie('token', jwtToken, {
-      httpOnly: true,
-      secure: NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    console.log('✅ ✅ ✅ Google OAuth SUCCESS:', user.email);
-    return res.redirect('/dashboard.html');
-  } catch (error) {
-    console.error('❌ Google OAuth failed:', error.message);
-    return res.redirect('/login?error=oauth_failed');
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    console.log('✅ Google OAuth:', user.email);
+    res.redirect('/dashboard.html');
+  } catch (e) {
+    console.error('❌ Google OAuth failed:', e);
+    res.redirect('/login?error=oauth_failed');
   }
 });
 
-// ============================================================================
-// MICROSOFT OAUTH ROUTES
-// ============================================================================
-
+// Microsoft OAuth
 app.get('/auth/microsoft', (req, res) => {
-  if (!microsoftAuth) return res.status(501).json({ error: 'Microsoft OAuth not configured' });
-  try {
-    const authUrl = microsoftAuth.getAuthUrl();
-    res.redirect(authUrl);
-  } catch (error) {
-    console.error('❌ Error generating Microsoft auth URL:', error);
-    res.redirect('/login?error=oauth_config_error');
-  }
+  if (!microsoftAuth) return res.status(501).json({ error: 'Not configured' });
+  res.redirect(microsoftAuth.getAuthUrl());
 });
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const { code, error } = req.query;
   if (error || !code) return res.redirect('/login?error=oauth_failed');
-
   try {
     const tokens = await microsoftAuth.getTokensFromCode(code);
     const userInfo = await microsoftAuth.getUserInfo(tokens.access_token);
-
-    let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
+    let result = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
     let user;
-
-    if (userResult.rows.length > 0) {
-      const updateResult = await pool.query(
-        `UPDATE users SET microsoft_id = $1, microsoft_access_token = $2, microsoft_refresh_token = COALESCE($3, microsoft_refresh_token),
-         name = $4 WHERE email = $5 RETURNING id, name, email`,
+    if (result.rows.length > 0) {
+      result = await pool.query(
+        `UPDATE users SET microsoft_id=$1, microsoft_access_token=$2, microsoft_refresh_token=COALESCE($3,microsoft_refresh_token), name=$4 WHERE email=$5 RETURNING *`,
         [userInfo.microsoft_id, tokens.access_token, tokens.refresh_token, userInfo.name, userInfo.email]
       );
-      user = updateResult.rows[0];
+      user = result.rows[0];
     } else {
-      const insertResult = await pool.query(
-        `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email`,
+      result = await pool.query(
+        `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
         [userInfo.name, userInfo.email, userInfo.microsoft_id, tokens.access_token, tokens.refresh_token]
       );
-      user = insertResult.rows[0];
+      user = result.rows[0];
     }
-
-    const jwtToken = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.cookie('token', jwtToken, {
-      httpOnly: true,
-      secure: NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    console.log('✅ Microsoft OAuth SUCCESS:', user.email);
-    return res.redirect('/dashboard.html');
-  } catch (error) {
-    console.error('❌ Microsoft OAuth failed:', error);
-    return res.redirect('/login?error=oauth_failed');
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    console.log('✅ Microsoft OAuth:', user.email);
+    res.redirect('/dashboard.html');
+  } catch (e) {
+    console.error('❌ Microsoft OAuth failed:', e);
+    res.redirect('/login?error=oauth_failed');
   }
 });
 
-// ============================================================================
-// EMAIL/PASSWORD AUTH
-// ============================================================================
-
+// Email/Password Auth
 app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
-
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
-      [name, email, hashedPassword]
-    );
-
-    const user = result.rows[0];
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ success: true, token, user });
-  } catch (error) {
-    console.error('❌ Signup error:', error);
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (exists.rows.length > 0) return res.status(409).json({ error: 'Email exists' });
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query('INSERT INTO users (name, email, password) VALUES ($1,$2,$3) RETURNING *', [name, email, hash]);
+    const token = jwt.sign({ userId: result.rows[0].id, email, name }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ success: true, token, user: result.rows[0] });
+  } catch (e) {
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -309,28 +168,16 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'email_not_found' });
-
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Not found' });
     const user = result.rows[0];
-    if (!user.password) return res.status(401).json({ error: 'no_password', message: 'Use OAuth' });
-
-    const isHashed = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
-    let passwordValid = isHashed ? await bcrypt.compare(password, user.password) : password === user.password;
-
-    if (passwordValid && !isHashed) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
-    }
-
-    if (!passwordValid) return res.status(401).json({ error: 'wrong_password' });
-
+    if (!user.password) return res.status(401).json({ error: 'Use OAuth' });
+    const valid = user.password.startsWith('$2') ? await bcrypt.compare(password, user.password) : password === user.password;
+    if (!valid) return res.status(401).json({ error: 'Wrong password' });
     const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, token, user: { id: user.id, name: user.name, email: user.email } });
-  } catch (error) {
-    console.error('❌ Login error:', error);
+  } catch (e) {
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -338,11 +185,10 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/verify', (req, res) => {
   const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ authenticated: false });
-
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ authenticated: true, user: { id: decoded.userId, email: decoded.email, name: decoded.name } });
-  } catch (error) {
+    res.json({ authenticated: true, user: decoded });
+  } catch (e) {
     res.status(401).json({ authenticated: false });
   }
 });
@@ -358,76 +204,36 @@ app.get('/dashboard.html', (req, res, next) => {
   try {
     jwt.verify(token, JWT_SECRET);
     next();
-  } catch (error) {
-    return res.redirect('/login?error=session_expired');
+  } catch (e) {
+    res.redirect('/login?error=expired');
   }
 });
 
-// ============================================================================
-// HEALTH CHECK
-// ============================================================================
-
+// Health check
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({
-      status: 'healthy',
-      googleAuth: !!googleAuth,
-      microsoftAuth: !!microsoftAuth,
-      emailService: !!emailService,
-    });
-  } catch (error) {
-    res.status(503).json({ status: 'unhealthy' });
+    res.json({ status: 'ok', google: !!googleAuth, microsoft: !!microsoftAuth });
+  } catch (e) {
+    res.status(503).json({ status: 'error' });
   }
 });
 
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
-
-app.use((req, res) => res.status(404).json({ error: 'Not found' }));
-app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+// Start server
+initDB().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 ScheduleSync API');
+    console.log(`📍 Port: ${PORT}`);
+    console.log(`✅ Cookie Parser: Enabled`);
+    console.log(`${googleAuth ? '✅' : '❌'} Google OAuth`);
+    console.log(`${microsoftAuth ? '✅' : '❌'} Microsoft OAuth`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  });
+}).catch(e => {
+  console.error('❌ Failed to start:', e);
+  process.exit(1);
 });
 
-// ============================================================================
-// START SERVER - NO RETRY LOOP!
-// ============================================================================
-
-async function startServer() {
-  try {
-    await initDatabase();
-    
-    app.listen(PORT, HOST, () => {
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`🚀 ScheduleSync API Server`);
-      console.log(`📍 ${HOST}:${PORT}`);
-      console.log(`🌍 ${NODE_ENV}`);
-      console.log(`✅ Database: Connected`);
-      console.log(`✅ Cookie Parser: Enabled`);
-      console.log(`${googleAuth ? '✅' : '❌'} Google OAuth`);
-      console.log(`${microsoftAuth ? '✅' : '❌'} Microsoft OAuth`);
-      console.log(`${emailService ? '✅' : '❌'} Email Service`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    });
-  } catch (error) {
-    console.error('❌ Failed to start:', error);
-    process.exit(1);
-  }
-}
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('Shutting down...');
-  pool.end();
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('Shutting down...');
-  pool.end();
-  process.exit(0);
-});
-
-startServer();
+process.on('SIGTERM', () => { pool.end(); process.exit(0); });
+process.on('SIGINT', () => { pool.end(); process.exit(0); });
