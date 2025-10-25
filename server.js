@@ -377,7 +377,8 @@ app.get('/health', (_req, res) => {
 app.get('/ready', (_req, res) => res.json({ status: 'ready' }));
 
 /* --------------------------------- Root ----------------------------------- */
-app.get('/', (_req, res) => {
+// API status endpoint moved to /api/status
+app.get('/api/status', (_req, res) => {
   res.json({
     status: 'ScheduleSync API Running',
     config: {
@@ -723,9 +724,17 @@ app.get('/auth/google/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Redirect to dashboard with token
+    // Encode user data to pass to frontend
+    const userData = encodeURIComponent(JSON.stringify({
+      id: dbUser.id,
+      name: dbUser.name,
+      email: dbUser.email,
+      picture: dbUser.profile_picture
+    }));
+
+    // Redirect to dashboard with token and user data
     console.log('➡️  Redirecting to dashboard');
-    res.redirect(`/dashboard?token=${token}`);
+    res.redirect(`/dashboard?token=${token}&user=${userData}`);
 
   } catch (error) {
     console.error('❌ OAuth callback error:', error);
@@ -2088,8 +2097,19 @@ app.get('/api/calendar/microsoft/callback', async (req, res) => {
     // Create JWT token and redirect to dashboard
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
     
-    // Redirect to dashboard with token (frontend will store it)
-    res.redirect(`/dashboard?token=${token}&microsoft=connected`);
+    // Get full user data to pass to frontend
+    const fullUserResult = await pool.query('SELECT id, name, email, profile_picture FROM users WHERE id = $1', [userId]);
+    const user = fullUserResult.rows[0];
+    
+    const userData = encodeURIComponent(JSON.stringify({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      picture: user.profile_picture
+    }));
+    
+    // Redirect to dashboard with token and user data
+    res.redirect(`/dashboard?token=${token}&user=${userData}`);
   } catch (error) {
     console.error('❌ Error in Microsoft OAuth callback:', error.response?.data || error.message);
     res.redirect('/login?error=' + encodeURIComponent(error.message));
