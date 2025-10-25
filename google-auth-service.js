@@ -1,4 +1,4 @@
-// google-auth-service.js - Google OAuth and Calendar API integration
+﻿// google-auth-service.js - Google OAuth and Calendar API integration
 
 const { google } = require('googleapis');
 const { OAuth2Client } = require('google-auth-library');
