@@ -460,10 +460,13 @@
                 }
             });
 
-            // Get the save button by querying for it
-            const btn = document.querySelector('.btn-primary');
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
+            // Get ALL primary buttons and use the last one (the Save button)
+            const buttons = document.querySelectorAll('.btn-primary');
+            const btn = buttons[buttons.length - 1];
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+            }
 
             try {
                 const response = await fetch('/api/availability', {
@@ -476,21 +479,25 @@
                 });
 
                 if (response.ok) {
-                    btn.textContent = '✅ Saved!';
+                    if (btn) btn.textContent = '✅ Saved!';
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 1000);
                 } else {
                     const data = await response.json();
                     alert('❌ Failed to save: ' + (data.error || 'Unknown error'));
-                    btn.disabled = false;
-                    btn.textContent = 'Save Availability';
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Save Availability';
+                    }
                 }
             } catch (error) {
                 console.error('Error saving availability:', error);
                 alert('❌ Error saving availability');
-                btn.disabled = false;
-                btn.textContent = 'Save Availability';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save Availability';
+                }
             }
         }
 
