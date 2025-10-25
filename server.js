@@ -310,19 +310,31 @@ function authenticateToken(req, res, next) {
 function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
 
+  let h, m;
+  
+  // Check if time has AM/PM (12-hour format)
   const parts = String(timeStr).trim().split(/\s+/);
-  if (parts.length < 2) return null;
+  
+  if (parts.length >= 2) {
+    // 12-hour format: "4:00 PM" or "11:30 AM"
+    const [hm, ampmRaw] = parts;
+    const [hRaw, mRaw = '0'] = hm.split(':');
+    h = parseInt(hRaw, 10);
+    m = parseInt(mRaw, 10);
+    const ampm = (ampmRaw || '').toUpperCase();
 
-  const [hm, ampmRaw] = parts;
-  const [hRaw, mRaw = '0'] = hm.split(':');
-  let h = parseInt(hRaw, 10);
-  const m = parseInt(mRaw, 10);
-  const ampm = (ampmRaw || '').toUpperCase();
+    if (isNaN(h) || isNaN(m)) return null;
 
-  if (isNaN(h) || isNaN(m)) return null;
-
-  if (ampm === 'PM' && h < 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+  } else {
+    // 24-hour format: "16:00" or "09:30"
+    const [hRaw, mRaw = '0'] = timeStr.split(':');
+    h = parseInt(hRaw, 10);
+    m = parseInt(mRaw, 10);
+    
+    if (isNaN(h) || isNaN(m)) return null;
+  }
 
   const hh = String(h).padStart(2, '0');
   const mm = String(m).padStart(2, '0');
