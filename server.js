@@ -1,6 +1,7 @@
 ﻿// ============================================================================
-// ScheduleSync API Server - Complete Clean Version
-// Google OAuth Fixed + Microsoft OAuth Support
+// ScheduleSync API Server - Complete Clean Version (Patched)
+// - Fix Microsoft env var name (MICROSOFT_REDIRECT_URI || MICROSOFT_CALLBACK_URL)
+// - Bind explicitly to 0.0.0.0 for Azure/Railway
 // ============================================================================
 
 require('dotenv').config();
@@ -46,7 +47,7 @@ try {
 // CONFIGURATION
 // ============================================================================
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // Use platform port or fall back for local
 const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-change-in-production';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -61,10 +62,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL;
 
-// Microsoft OAuth config
+// Microsoft OAuth config (patched: accept either env var)
 const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
-const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI;
+const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI || process.env.MICROSOFT_CALLBACK_URL;
 
 // ============================================================================
 // EXPRESS APP SETUP
@@ -916,7 +917,7 @@ app.get('/dashboard.html', (req, res, next) => {
 });
 
 // ============================================================================
-// HEALTH CHECK
+// HEALTH / DEBUG
 // ============================================================================
 
 app.get('/health', async (req, res) => {
@@ -957,7 +958,7 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================================================
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🚀 ScheduleSync API Server`);
   console.log(`📍 Port: ${PORT}`);
