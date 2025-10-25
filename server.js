@@ -875,19 +875,53 @@ app.post('/api/user/disconnect-google', authenticateToken, async (req, res) => {
 });
 
 /* ----------------------- Analytics (minimal demo) ------------------------- */
-app.get('/api/analytics/dashboard', async (req, res) => {
+app.get('/api/analytics/dashboard', authenticateToken, async (req, res) => {
   try {
+    const userId = req.userId;
     const a = { totalBookings: 0, upcomingMeetings: 0, completedMeetings: 0, teamMembers: 0, recentActivity: [] };
+    
     try {
-      const r = await pool.query('SELECT COUNT(*) AS c FROM bookings');
+      // Count bookings for user's teams only
+      const r = await pool.query(
+        `SELECT COUNT(*) AS c FROM bookings b
+         JOIN teams t ON b.team_id = t.id
+         WHERE t.owner_id = $1`,
+        [userId]
+      );
       a.totalBookings = parseInt(r.rows[0]?.c || 0);
-    } catch {}
+    } catch (e) {
+      console.error('Error counting bookings:', e);
+    }
+    
     try {
-      const r = await pool.query('SELECT COUNT(*) AS c FROM team_members');
+      // Count upcoming meetings for user's teams
+      const r = await pool.query(
+        `SELECT COUNT(*) AS c FROM bookings b
+         JOIN teams t ON b.team_id = t.id
+         WHERE t.owner_id = $1 AND b.booking_date >= CURRENT_DATE`,
+        [userId]
+      );
+      a.upcomingMeetings = parseInt(r.rows[0]?.c || 0);
+    } catch (e) {
+      console.error('Error counting upcoming meetings:', e);
+    }
+    
+    try {
+      // Count team members across all user's teams
+      const r = await pool.query(
+        `SELECT COUNT(DISTINCT tm.id) AS c FROM team_members tm
+         JOIN teams t ON tm.team_id = t.id
+         WHERE t.owner_id = $1`,
+        [userId]
+      );
       a.teamMembers = parseInt(r.rows[0]?.c || 0);
-    } catch {}
+    } catch (e) {
+      console.error('Error counting team members:', e);
+    }
+    
     res.json(a);
   } catch (e) {
+    console.error('Error in analytics:', e);
     res.json({ totalBookings: 0, upcomingMeetings: 0, completedMeetings: 0, teamMembers: 0, recentActivity: [] });
   }
 });
