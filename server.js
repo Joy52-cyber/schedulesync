@@ -1,6 +1,6 @@
 ﻿// ============================================================================
-// ScheduleSync API Server - Railway Optimized
-// Google OAuth Fixed + Microsoft OAuth Support + Proper Shutdown
+// ScheduleSync API Server - Final Version
+// Google OAuth Fixed + Microsoft OAuth Support
 // ============================================================================
 
 require('dotenv').config();
@@ -15,7 +15,7 @@ const { Pool } = require('pg');
 const path = require('path');
 
 // ============================================================================
-// SERVICES (Optional imports)
+// SERVICES
 // ============================================================================
 
 let googleAuth = null;
@@ -47,19 +47,14 @@ try {
 // ============================================================================
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = '0.0.0.0'; // Listen on all interfaces for Railway
+const HOST = '0.0.0.0';
 const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-change-in-production';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-console.log(`📍 Server will bind to ${HOST}:${PORT}`);
-
-// Database connection with retry logic
+// Database connection
 const pool = new Pool({
   connectionString: process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
 });
 
 // ============================================================================
@@ -68,10 +63,9 @@ const pool = new Pool({
 
 const app = express();
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(cookieParser()); // 🔥 CRITICAL for OAuth!
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
@@ -85,81 +79,65 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ============================================================================
 
 async function initDatabase() {
-  const maxRetries = 5;
-  let retries = 0;
-  
-  while (retries < maxRetries) {
-    try {
-      // Test connection
-      await pool.query('SELECT 1');
-      
-      // Users table
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password VARCHAR(255),
-          google_id VARCHAR(255),
-          google_access_token TEXT,
-          google_refresh_token TEXT,
-          microsoft_id VARCHAR(255),
-          microsoft_access_token TEXT,
-          microsoft_refresh_token TEXT,
-          profile_picture TEXT,
-          timezone VARCHAR(100) DEFAULT 'UTC',
-          reset_token VARCHAR(255),
-          reset_token_expiry TIMESTAMP,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
+  try {
+    await pool.query('SELECT 1');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255),
+        google_id VARCHAR(255),
+        google_access_token TEXT,
+        google_refresh_token TEXT,
+        microsoft_id VARCHAR(255),
+        microsoft_access_token TEXT,
+        microsoft_refresh_token TEXT,
+        profile_picture TEXT,
+        timezone VARCHAR(100) DEFAULT 'UTC',
+        reset_token VARCHAR(255),
+        reset_token_expiry TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-      // Bookings table
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS bookings (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          title VARCHAR(255) NOT NULL,
-          description TEXT,
-          start_time TIMESTAMP NOT NULL,
-          end_time TIMESTAMP NOT NULL,
-          attendee_email VARCHAR(255),
-          attendee_name VARCHAR(255),
-          meet_link TEXT,
-          calendar_event_id TEXT,
-          calendar_provider VARCHAR(50),
-          status VARCHAR(50) DEFAULT 'confirmed',
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        start_time TIMESTAMP NOT NULL,
+        end_time TIMESTAMP NOT NULL,
+        attendee_email VARCHAR(255),
+        attendee_name VARCHAR(255),
+        meet_link TEXT,
+        calendar_event_id TEXT,
+        calendar_provider VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'confirmed',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-      // Calendar integrations table
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS calendar_integrations (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          provider VARCHAR(50) NOT NULL,
-          calendar_id VARCHAR(255) NOT NULL,
-          calendar_name VARCHAR(255),
-          is_primary BOOLEAN DEFAULT false,
-          is_active BOOLEAN DEFAULT true,
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(user_id, provider, calendar_id)
-        )
-      `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS calendar_integrations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        provider VARCHAR(50) NOT NULL,
+        calendar_id VARCHAR(255) NOT NULL,
+        calendar_name VARCHAR(255),
+        is_primary BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, provider, calendar_id)
+      )
+    `);
 
-      console.log('✅ Database schema initialized');
-      return;
-    } catch (error) {
-      retries++;
-      console.error(`❌ Database init attempt ${retries}/${maxRetries} failed:`, error.message);
-      if (retries < maxRetries) {
-        console.log(`⏳ Retrying in ${retries * 2} seconds...`);
-        await new Promise(resolve => setTimeout(resolve, retries * 2000));
-      } else {
-        throw error;
-      }
-    }
+    console.log('✅ Database schema initialized');
+  } catch (error) {
+    console.error('❌ Database initialization error:', error.message);
+    process.exit(1);
   }
 }
 
@@ -169,10 +147,7 @@ async function initDatabase() {
 
 function authenticateToken(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -188,13 +163,9 @@ function authenticateToken(req, res, next) {
 // ============================================================================
 
 app.get('/auth/google', (req, res) => {
-  if (!googleAuth) {
-    return res.status(501).json({ error: 'Google OAuth not configured' });
-  }
-
+  if (!googleAuth) return res.status(501).json({ error: 'Google OAuth not configured' });
   try {
     const authUrl = googleAuth.getAuthUrl();
-    console.log('🔗 Redirecting to Google OAuth');
     res.redirect(authUrl);
   } catch (error) {
     console.error('❌ Error generating Google auth URL:', error);
@@ -204,38 +175,24 @@ app.get('/auth/google', (req, res) => {
 
 app.get('/auth/google/callback', async (req, res) => {
   const { code, error } = req.query;
-
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🔍 Google OAuth Callback');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  if (error || !code) {
-    console.error('❌ OAuth error or no code');
-    return res.redirect('/login?error=oauth_failed');
-  }
+  
+  if (error || !code) return res.redirect('/login?error=oauth_failed');
 
   try {
-    console.log('📝 Getting tokens...');
     const tokens = await googleAuth.getTokensFromCode(code);
-    
-    console.log('📝 Getting user info...');
     const userInfo = await googleAuth.getUserInfo(tokens.access_token);
 
-    console.log('📝 Finding/creating user...');
     let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
-
     let user;
+
     if (userResult.rows.length > 0) {
       const updateResult = await pool.query(
-        `UPDATE users 
-         SET google_id = $1, google_access_token = $2, google_refresh_token = COALESCE($3, google_refresh_token),
-             name = $4, profile_picture = $5
-         WHERE email = $6
-         RETURNING id, name, email, profile_picture`,
+        `UPDATE users SET google_id = $1, google_access_token = $2, google_refresh_token = COALESCE($3, google_refresh_token),
+         name = $4, profile_picture = $5 WHERE email = $6 RETURNING id, name, email, profile_picture`,
         [userInfo.google_id, tokens.access_token, tokens.refresh_token, userInfo.name, userInfo.picture, userInfo.email]
       );
       user = updateResult.rows[0];
-      console.log('✅ User updated:', user.id);
+      console.log('✅ Google OAuth: User updated', user.id);
     } else {
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, google_id, google_access_token, google_refresh_token, profile_picture)
@@ -243,15 +200,11 @@ app.get('/auth/google/callback', async (req, res) => {
         [userInfo.name, userInfo.email, userInfo.google_id, tokens.access_token, tokens.refresh_token, userInfo.picture]
       );
       user = insertResult.rows[0];
-      console.log('✅ New user created:', user.id);
+      console.log('✅ Google OAuth: New user created', user.id);
     }
 
-    const jwtToken = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
+    const jwtToken = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    
     res.cookie('token', jwtToken, {
       httpOnly: true,
       secure: NODE_ENV === 'production',
@@ -262,7 +215,7 @@ app.get('/auth/google/callback', async (req, res) => {
     console.log('✅ ✅ ✅ Google OAuth SUCCESS:', user.email);
     return res.redirect('/dashboard.html');
   } catch (error) {
-    console.error('❌ ❌ ❌ Google OAuth FAILED:', error.message);
+    console.error('❌ Google OAuth failed:', error.message);
     return res.redirect('/login?error=oauth_failed');
   }
 });
@@ -272,13 +225,9 @@ app.get('/auth/google/callback', async (req, res) => {
 // ============================================================================
 
 app.get('/auth/microsoft', (req, res) => {
-  if (!microsoftAuth) {
-    return res.status(501).json({ error: 'Microsoft OAuth not configured' });
-  }
-
+  if (!microsoftAuth) return res.status(501).json({ error: 'Microsoft OAuth not configured' });
   try {
     const authUrl = microsoftAuth.getAuthUrl();
-    console.log('🔗 Redirecting to Microsoft OAuth');
     res.redirect(authUrl);
   } catch (error) {
     console.error('❌ Error generating Microsoft auth URL:', error);
@@ -288,24 +237,19 @@ app.get('/auth/microsoft', (req, res) => {
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const { code, error } = req.query;
-
-  if (error || !code) {
-    console.error('❌ Microsoft OAuth error');
-    return res.redirect('/login?error=oauth_failed');
-  }
+  if (error || !code) return res.redirect('/login?error=oauth_failed');
 
   try {
     const tokens = await microsoftAuth.getTokensFromCode(code);
     const userInfo = await microsoftAuth.getUserInfo(tokens.access_token);
 
     let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userInfo.email]);
-
     let user;
+
     if (userResult.rows.length > 0) {
       const updateResult = await pool.query(
-        `UPDATE users 
-         SET microsoft_id = $1, microsoft_access_token = $2, microsoft_refresh_token = COALESCE($3, microsoft_refresh_token), name = $4
-         WHERE email = $5 RETURNING id, name, email`,
+        `UPDATE users SET microsoft_id = $1, microsoft_access_token = $2, microsoft_refresh_token = COALESCE($3, microsoft_refresh_token),
+         name = $4 WHERE email = $5 RETURNING id, name, email`,
         [userInfo.microsoft_id, tokens.access_token, tokens.refresh_token, userInfo.name, userInfo.email]
       );
       user = updateResult.rows[0];
@@ -318,12 +262,8 @@ app.get('/auth/microsoft/callback', async (req, res) => {
       user = insertResult.rows[0];
     }
 
-    const jwtToken = jwt.sign(
-      { userId: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
+    const jwtToken = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    
     res.cookie('token', jwtToken, {
       httpOnly: true,
       secure: NODE_ENV === 'production',
@@ -340,20 +280,16 @@ app.get('/auth/microsoft/callback', async (req, res) => {
 });
 
 // ============================================================================
-// AUTH ENDPOINTS (Email/Password, Password Reset, etc.)
+// EMAIL/PASSWORD AUTH
 // ============================================================================
 
 app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'All fields required' });
-  }
+  if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
 
   try {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'Email already registered' });
-    }
+    if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
@@ -363,7 +299,6 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-
     res.json({ success: true, token, user });
   } catch (error) {
     console.error('❌ Signup error:', error);
@@ -373,20 +308,14 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
-  }
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'email_not_found', message: 'No account found' });
-    }
+    if (result.rows.length === 0) return res.status(401).json({ error: 'email_not_found' });
 
     const user = result.rows[0];
-    if (!user.password) {
-      return res.status(401).json({ error: 'no_password', message: 'Use OAuth to sign in' });
-    }
+    if (!user.password) return res.status(401).json({ error: 'no_password', message: 'Use OAuth' });
 
     const isHashed = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
     let passwordValid = isHashed ? await bcrypt.compare(password, user.password) : password === user.password;
@@ -396,9 +325,7 @@ app.post('/api/auth/login', async (req, res) => {
       await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
     }
 
-    if (!passwordValid) {
-      return res.status(401).json({ error: 'wrong_password', message: 'Incorrect password' });
-    }
+    if (!passwordValid) return res.status(401).json({ error: 'wrong_password' });
 
     const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, token, user: { id: user.id, name: user.name, email: user.email } });
@@ -425,7 +352,6 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Protected dashboard
 app.get('/dashboard.html', (req, res, next) => {
   const token = req.cookies.token;
   if (!token) return res.redirect('/login?error=not_authenticated');
@@ -446,13 +372,12 @@ app.get('/health', async (req, res) => {
     await pool.query('SELECT 1');
     res.json({
       status: 'healthy',
-      database: 'connected',
       googleAuth: !!googleAuth,
       microsoftAuth: !!microsoftAuth,
       emailService: !!emailService,
     });
   } catch (error) {
-    res.status(503).json({ status: 'unhealthy', error: error.message });
+    res.status(503).json({ status: 'unhealthy' });
   }
 });
 
@@ -467,80 +392,42 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================================
-// SERVER STARTUP WITH GRACEFUL SHUTDOWN
+// START SERVER - NO RETRY LOOP!
 // ============================================================================
-
-let server;
 
 async function startServer() {
   try {
-    // Initialize database first
     await initDatabase();
     
-    // Start server
-    server = app.listen(PORT, HOST, () => {
+    app.listen(PORT, HOST, () => {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`🚀 ScheduleSync API Server`);
-      console.log(`📍 Listening on ${HOST}:${PORT}`);
-      console.log(`🌍 Environment: ${NODE_ENV}`);
+      console.log(`📍 ${HOST}:${PORT}`);
+      console.log(`🌍 ${NODE_ENV}`);
       console.log(`✅ Database: Connected`);
       console.log(`✅ Cookie Parser: Enabled`);
-      console.log(`${googleAuth ? '✅' : '❌'} Google OAuth: ${googleAuth ? 'Enabled' : 'Disabled'}`);
-      console.log(`${microsoftAuth ? '✅' : '❌'} Microsoft OAuth: ${microsoftAuth ? 'Enabled' : 'Disabled'}`);
-      console.log(`${emailService ? '✅' : '❌'} Email Service: ${emailService ? 'Enabled' : 'Disabled'}`);
+      console.log(`${googleAuth ? '✅' : '❌'} Google OAuth`);
+      console.log(`${microsoftAuth ? '✅' : '❌'} Microsoft OAuth`);
+      console.log(`${emailService ? '✅' : '❌'} Email Service`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     });
-
-    // Handle server errors
-    server.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use`);
-        console.log('⏳ Waiting 3 seconds before retry...');
-        setTimeout(() => {
-          server.close();
-          startServer();
-        }, 3000);
-      } else {
-        console.error('❌ Server error:', error);
-        process.exit(1);
-      }
-    });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('❌ Failed to start:', error);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
-async function shutdown(signal) {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
-  
-  if (server) {
-    server.close(async () => {
-      console.log('✅ HTTP server closed');
-      
-      try {
-        await pool.end();
-        console.log('✅ Database connections closed');
-        process.exit(0);
-      } catch (error) {
-        console.error('❌ Error closing database:', error);
-        process.exit(1);
-      }
-    });
+process.on('SIGTERM', () => {
+  console.log('Shutting down...');
+  pool.end();
+  process.exit(0);
+});
 
-    // Force close after 10 seconds
-    setTimeout(() => {
-      console.error('❌ Forcing shutdown after timeout');
-      process.exit(1);
-    }, 10000);
-  } else {
-    process.exit(0);
-  }
-}
+process.on('SIGINT', () => {
+  console.log('Shutting down...');
+  pool.end();
+  process.exit(0);
+});
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-
-// Start the server
 startServer();
