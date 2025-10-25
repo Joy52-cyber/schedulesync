@@ -8,6 +8,18 @@
     // FIRST: Check if there's a token in the URL and save it
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    const userParam = urlParams.get('user');
+    
+    // Save user data if provided (even without token)
+    if (userParam) {
+        try {
+            const userData = JSON.parse(decodeURIComponent(userParam));
+            localStorage.setItem('user', JSON.stringify(userData));
+            console.log('✅ User data saved:', userData.email);
+        } catch (e) {
+            console.error('Failed to parse user data:', e);
+        }
+    }
     
     if (token) {
         console.log('✅ Token found in URL:', token.substring(0, 20) + '...');
@@ -15,9 +27,10 @@
         localStorage.setItem('token', token);
         console.log('✅ Token saved to localStorage');
         
-        // Remove token from URL for security
+        // Remove token and user from URL for security
         const url = new URL(window.location);
         url.searchParams.delete('token');
+        url.searchParams.delete('user');
         url.searchParams.delete('google');
         url.searchParams.delete('microsoft');
         window.history.replaceState({}, document.title, url);
@@ -25,6 +38,14 @@
         console.log('✅ OAuth sign-in successful - staying on', window.location.pathname);
         // Don't redirect - let the page load normally
         return; // Exit early - we're good!
+    }
+    
+    // If only user param (no token), clean URL
+    if (userParam) {
+        const url = new URL(window.location);
+        url.searchParams.delete('user');
+        window.history.replaceState({}, document.title, url);
+        console.log('✅ User data updated from URL');
     }
     
     // SECOND: Check if user is already authenticated (no token in URL)
