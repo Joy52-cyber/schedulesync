@@ -224,9 +224,9 @@ app.get('/auth/google/callback', async (req, res) => {
       user = result.rows[0];
     }
     const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    const userData = { id: user.id, name: user.name, email: user.email, picture: user.profile_picture };
     console.log('✅ Google OAuth:', user.email);
-    res.redirect('/dashboard.html');
+    res.redirect(`/dashboard.html?token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`);
   } catch (e) {
     console.error('❌ Google OAuth failed:', e);
     res.redirect('/login?error=oauth_failed');
@@ -261,9 +261,9 @@ app.get('/auth/microsoft/callback', async (req, res) => {
       user = result.rows[0];
     }
     const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    const userData = { id: user.id, name: user.name, email: user.email };
     console.log('✅ Microsoft OAuth:', user.email);
-    res.redirect('/dashboard.html');
+    res.redirect(`/dashboard.html?token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`);
   } catch (e) {
     console.error('❌ Microsoft OAuth failed:', e);
     res.redirect('/login?error=oauth_failed');
