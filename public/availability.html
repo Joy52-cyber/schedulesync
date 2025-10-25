@@ -460,7 +460,8 @@
                 }
             });
 
-            const btn = event.target;
+            // Get the save button by querying for it
+            const btn = document.querySelector('.btn-primary');
             btn.disabled = true;
             btn.textContent = 'Saving...';
 
@@ -496,5 +497,4 @@
         loadAvailability();
     </script>
 </body>
-</html> 
- 
+</html>
