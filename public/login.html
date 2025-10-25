@@ -84,6 +84,11 @@
             transform: translateY(0);
         }
 
+        .oauth-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .oauth-icon {
             width: 24px;
             height: 24px;
@@ -237,6 +242,20 @@
         .back-link a:hover {
             color: #667eea;
         }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f4f6;
+            border-top-color: #374151;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -250,24 +269,24 @@
         <div id="alert" class="alert"></div>
 
         <div class="oauth-buttons">
-            <button class="oauth-btn" onclick="signInWithGoogle()">
+            <button class="oauth-btn" onclick="signInWithGoogle()" id="googleBtn">
                 <svg class="oauth-icon" viewBox="0 0 48 48">
                     <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
                     <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
                     <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
                     <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
                 </svg>
-                Continue with Google
+                <span id="googleBtnText">Continue with Google</span>
             </button>
 
-            <button class="oauth-btn" onclick="signInWithMicrosoft()">
+            <button class="oauth-btn" onclick="signInWithMicrosoft()" id="microsoftBtn">
                 <svg class="oauth-icon" viewBox="0 0 48 48">
                     <path fill="#ff5722" d="M6 6h18v18H6z"/>
                     <path fill="#4caf50" d="M26 6h18v18H26z"/>
                     <path fill="#ffc107" d="M6 26h18v18H6z"/>
                     <path fill="#03a9f4" d="M26 26h18v18H26z"/>
                 </svg>
-                Continue with Microsoft
+                <span id="microsoftBtnText">Continue with Microsoft</span>
             </button>
         </div>
 
@@ -324,34 +343,58 @@
         }
 
         async function signInWithGoogle() {
+            const btn = document.getElementById('googleBtn');
+            const btnText = document.getElementById('googleBtnText');
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span> Connecting...';
+
             try {
                 const response = await fetch('/api/auth/google');
                 const data = await response.json();
                 
                 if (data.authUrl) {
+                    // Redirect to Google OAuth
                     window.location.href = data.authUrl;
                 } else {
-                    showAlert('Failed to initiate Google sign-in', 'error');
+                    throw new Error('No auth URL received');
                 }
             } catch (error) {
                 console.error('Error:', error);
                 showAlert('Failed to connect to Google', 'error');
+                
+                // Re-enable button
+                btn.disabled = false;
+                btnText.textContent = 'Continue with Google';
             }
         }
 
         async function signInWithMicrosoft() {
+            const btn = document.getElementById('microsoftBtn');
+            const btnText = document.getElementById('microsoftBtnText');
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span> Connecting...';
+
             try {
                 const response = await fetch('/api/auth/microsoft');
                 const data = await response.json();
                 
                 if (data.authUrl) {
+                    // Redirect to Microsoft OAuth
                     window.location.href = data.authUrl;
                 } else {
-                    showAlert('Failed to initiate Microsoft sign-in', 'error');
+                    throw new Error('No auth URL received');
                 }
             } catch (error) {
                 console.error('Error:', error);
                 showAlert('Failed to connect to Microsoft', 'error');
+                
+                // Re-enable button
+                btn.disabled = false;
+                btnText.textContent = 'Continue with Microsoft';
             }
         }
 
@@ -371,11 +414,20 @@
                 const data = await response.json();
 
                 if (response.ok && data.token) {
+                    // Store token and user info
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    window.location.href = '/dashboard';
+                    
+                    // UPDATED: Smart redirect based on calendar connection
+                    if (data.user.has_calendar_connected) {
+                        // User has calendar connected - go to dashboard
+                        window.location.href = '/dashboard';
+                    } else {
+                        // User needs to connect calendar
+                        window.location.href = '/calendar-setup';
+                    }
                 } else {
-                    // Show specific error message based on error type
+                    // Show specific error message
                     if (data.type === 'email_not_found') {
                         showAlert('❌ No account found with this email. Please sign up first.', 'error');
                     } else if (data.type === 'wrong_password') {
