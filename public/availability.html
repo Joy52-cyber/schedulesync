@@ -271,6 +271,30 @@
             to { transform: rotate(360deg); }
         }
 
+        .alert {
+            padding: 12px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 2px solid #10b981;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 2px solid #ef4444;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
         @media (max-width: 768px) {
             .time-slot {
                 grid-template-columns: 1fr;
@@ -313,6 +337,8 @@
         </div>
 
         <div class="card">
+            <div id="alert" class="alert"></div>
+
             <div class="quick-actions">
                 <button class="quick-btn" onclick="setWorkWeek()">📅 Work Week (Mon-Fri 9-5)</button>
                 <button class="quick-btn" onclick="setAllDays()">✅ Enable All Days</button>
@@ -337,14 +363,17 @@
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-        if (!token) window.location.href = '/login';
+        if (!token) {
+            window.location.href = '/login';
+        }
 
         const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const dayShortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-        // Load existing availability
+        // Load existing availability from backend
         async function loadAvailability() {
             try {
+                console.log('📥 Loading availability from API...');
                 const response = await fetch('/api/availability', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -353,27 +382,35 @@
                 if (response.ok) {
                     const data = await response.json();
                     existingSlots = data.slots || [];
+                    console.log('✅ Loaded', existingSlots.length, 'slots from backend');
+                } else {
+                    console.error('❌ Failed to load availability:', response.status);
                 }
 
                 renderAvailability(existingSlots);
             } catch (error) {
-                console.error('Error loading availability:', error);
+                console.error('💥 Error loading availability:', error);
+                showAlert('Failed to load availability', 'error');
                 renderAvailability([]);
             }
         }
 
+        // Render availability UI with loaded data
         function renderAvailability(existingSlots) {
+            console.log('🎨 Rendering availability with', existingSlots.length, 'saved slots');
             let html = '<div class="time-slots">';
 
             dayNames.forEach((dayName, index) => {
                 const dayShort = dayShortNames[index];
-                const dayOfWeek = index + 1;
+                const dayOfWeek = index + 1; // 1=Monday, 7=Sunday
 
+                // Find if this day has saved availability
                 const existingSlot = existingSlots.find(s => s.day_of_week === dayOfWeek);
                 
-                const startTime = existingSlot ? existingSlot.start_time : (index < 5 ? '09:00' : '10:00');
-                const endTime = existingSlot ? existingSlot.end_time : (index < 5 ? '17:00' : '14:00');
-                const isEnabled = !!existingSlot || index < 5;
+                // ✅ FIXED: Only enable if data exists in database
+                const startTime = existingSlot ? existingSlot.start_time : '09:00';
+                const endTime = existingSlot ? existingSlot.end_time : '17:00';
+                const isEnabled = !!existingSlot; // Only enable if slot exists
 
                 html += `
                     <div class="time-slot ${isEnabled ? 'active' : 'inactive'}" id="slot-${dayShort}">
@@ -401,6 +438,7 @@
             document.getElementById('actions').style.display = 'flex';
         }
 
+        // Toggle day enabled/disabled
         function toggleSlot(day) {
             const slot = document.getElementById(`slot-${day}`);
             const checkbox = document.getElementById(`${day}-enabled`);
@@ -414,6 +452,7 @@
             }
         }
 
+        // Quick action: Set work week (Mon-Fri 9-5)
         function setWorkWeek() {
             dayShortNames.forEach((day, index) => {
                 const checkbox = document.getElementById(`${day}-enabled`);
@@ -424,49 +463,68 @@
                     checkbox.checked = true;
                     startInput.value = '09:00';
                     endInput.value = '17:00';
-                    toggleSlot(day);
-                } else {
+                } else { // Sat-Sun
                     checkbox.checked = false;
-                    toggleSlot(day);
                 }
+                toggleSlot(day);
             });
         }
 
+        // Quick action: Enable all days
         function setAllDays() {
             dayShortNames.forEach((day) => {
-                document.getElementById(`${day}-enabled`).checked = true;
+                const checkbox = document.getElementById(`${day}-enabled`);
+                checkbox.checked = true;
                 toggleSlot(day);
             });
         }
 
+        // Quick action: Clear all
         function clearAll() {
             dayShortNames.forEach((day) => {
-                document.getElementById(`${day}-enabled`).checked = false;
+                const checkbox = document.getElementById(`${day}-enabled`);
+                checkbox.checked = false;
                 toggleSlot(day);
             });
         }
 
+        // Save availability to backend
         async function saveAvailability() {
-            const availability = [];
-
+            // Collect enabled slots
+            const slots = [];
             dayShortNames.forEach((day, index) => {
                 const enabled = document.getElementById(`${day}-enabled`).checked;
                 if (enabled) {
-                    availability.push({
+                    const startTime = document.getElementById(`${day}-start`).value;
+                    const endTime = document.getElementById(`${day}-end`).value;
+                    
+                    // Validate times
+                    if (startTime >= endTime) {
+                        showAlert(`Invalid time range for ${dayNames[index]}. End time must be after start time.`, 'error');
+                        return;
+                    }
+                    
+                    slots.push({
                         day_of_week: index + 1,
-                        start_time: document.getElementById(`${day}-start`).value,
-                        end_time: document.getElementById(`${day}-end`).value
+                        start_time: startTime,
+                        end_time: endTime
                     });
                 }
             });
 
-            // Get ALL primary buttons and use the last one (the Save button)
-            const buttons = document.querySelectorAll('.btn-primary');
-            const btn = buttons[buttons.length - 1];
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Saving...';
+            // Validate at least one slot
+            if (slots.length === 0) {
+                showAlert('Please select at least one day with availability', 'error');
+                return;
             }
+
+            console.log('💾 Saving', slots.length, 'slots to backend...');
+
+            // Disable button during save
+            const btn = document.querySelector('.btn-primary');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
 
             try {
                 const response = await fetch('/api/availability', {
@@ -475,32 +533,49 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ slots: availability })
+                    body: JSON.stringify({ slots })
                 });
 
+                const data = await response.json();
+
                 if (response.ok) {
-                    if (btn) btn.textContent = '✅ Saved!';
+                    console.log('✅ Availability saved successfully');
+                    btn.textContent = '✅ Saved!';
+                    showAlert('Availability saved successfully!', 'success');
+                    
+                    // Reload after short delay to show saved state
                     setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1000);
-                } else {
-                    const data = await response.json();
-                    alert('❌ Failed to save: ' + (data.error || 'Unknown error'));
-                    if (btn) {
+                        loadAvailability();
                         btn.disabled = false;
-                        btn.textContent = 'Save Availability';
-                    }
+                        btn.textContent = originalText;
+                    }, 1500);
+                } else {
+                    console.error('❌ Save failed:', data);
+                    showAlert(data.error || 'Failed to save availability', 'error');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
                 }
             } catch (error) {
-                console.error('Error saving availability:', error);
-                alert('❌ Error saving availability');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = 'Save Availability';
-                }
+                console.error('💥 Error saving availability:', error);
+                showAlert('Network error. Please try again.', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         }
 
+        // Show alert message
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert ${type} show`;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                alert.classList.remove('show');
+            }, 5000);
+        }
+
+        // Load availability on page load
         loadAvailability();
     </script>
 </body>
