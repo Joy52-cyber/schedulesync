@@ -410,25 +410,41 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body || {};
     
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    // Check if user exists
     const out = await pool.query('SELECT id, name, email, password FROM users WHERE email = $1', [email]);
     
     if (!out.rowCount) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.log('❌ Login failed: No account found with email:', email);
+      return res.status(401).json({ 
+        error: 'No account found with this email address',
+        type: 'email_not_found'
+      });
     }
 
     const user = out.rows[0];
 
+    // Check if user has a password set
+    if (!user.password) {
+      console.log('⚠️ Login failed: No password set for user:', email);
+      return res.status(401).json({ 
+        error: 'Please use Google or Microsoft sign-in, or reset your password',
+        type: 'no_password'
+      });
+    }
+
     // Check if password is hashed (starts with $2b$ for bcrypt)
     let passwordValid = false;
-    if (user.password && user.password.startsWith('$2b$')) {
+    if (user.password.startsWith('$2b$')) {
       // Hashed password - use bcrypt compare
       passwordValid = await bcrypt.compare(password, user.password);
+      console.log(`🔐 Password check for ${email}:`, passwordValid ? 'Valid ✅' : 'Invalid ❌');
     } else {
       // Plain text password (old accounts) - direct compare
       passwordValid = user.password === password;
+      console.log(`🔓 Plain text password check for ${email}:`, passwordValid ? 'Valid ✅' : 'Invalid ❌');
       
       // If valid, upgrade to hashed password
       if (passwordValid) {
@@ -439,9 +455,14 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     if (!passwordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.log('❌ Login failed: Incorrect password for:', email);
+      return res.status(401).json({ 
+        error: 'Incorrect password. Please try again or use "Forgot password?"',
+        type: 'wrong_password'
+      });
     }
 
+    console.log('✅ Login successful for user:', email);
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ 
       success: true, 

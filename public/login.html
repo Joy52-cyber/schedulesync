@@ -358,7 +358,7 @@
         async function handleLogin(e) {
             e.preventDefault();
             
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
 
             try {
@@ -375,11 +375,20 @@
                     localStorage.setItem('user', JSON.stringify(data.user));
                     window.location.href = '/dashboard';
                 } else {
-                    showAlert(data.error || 'Login failed', 'error');
+                    // Show specific error message based on error type
+                    if (data.type === 'email_not_found') {
+                        showAlert('❌ No account found with this email. Please sign up first.', 'error');
+                    } else if (data.type === 'wrong_password') {
+                        showAlert('❌ Incorrect password. Please try again or click "Forgot password?"', 'error');
+                    } else if (data.type === 'no_password') {
+                        showAlert('ℹ️ Please use Google or Microsoft sign-in, or reset your password.', 'info');
+                    } else {
+                        showAlert('❌ ' + (data.error || 'Login failed'), 'error');
+                    }
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showAlert('Login failed. Please try again.', 'error');
+                showAlert('❌ Connection error. Please try again.', 'error');
             }
         }
 
