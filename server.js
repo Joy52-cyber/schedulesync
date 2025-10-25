@@ -1,6 +1,6 @@
 ﻿// ============================================================================
-// ScheduleSync API Server
-// Clean, production-ready implementation with Google OAuth fix
+// ScheduleSync API Server - Complete Clean Version
+// Google OAuth Fixed + Microsoft OAuth Support
 // ============================================================================
 
 require('dotenv').config();
@@ -91,7 +91,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function initDatabase() {
   try {
-    // Users table
+    // Users table with all OAuth columns
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -125,6 +125,7 @@ async function initDatabase() {
         attendee_name VARCHAR(255),
         meet_link TEXT,
         calendar_event_id TEXT,
+        calendar_provider VARCHAR(50),
         status VARCHAR(50) DEFAULT 'confirmed',
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -140,7 +141,8 @@ async function initDatabase() {
         calendar_name VARCHAR(255),
         is_primary BOOLEAN DEFAULT false,
         is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, provider, calendar_id)
       )
     `);
 
@@ -326,8 +328,10 @@ app.get('/auth/microsoft', (req, res) => {
 app.get('/auth/microsoft/callback', async (req, res) => {
   const { code, error } = req.query;
 
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔍 Microsoft OAuth Callback');
   console.log('Code:', code ? 'Received' : 'NONE');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   if (error || !code) {
     console.error('❌ OAuth error or no code');
@@ -363,6 +367,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
         ]
       );
       user = updateResult.rows[0];
+      console.log('✅ User updated:', user.id);
     } else {
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token)
@@ -377,6 +382,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
         ]
       );
       user = insertResult.rows[0];
+      console.log('✅ New user created:', user.id);
     }
 
     const jwtToken = jwt.sign(
@@ -396,7 +402,9 @@ app.get('/auth/microsoft/callback', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    console.log('✅ Microsoft OAuth SUCCESS:', user.email);
+    console.log('✅ ✅ ✅ Microsoft OAuth SUCCESS:', user.email);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    
     return res.redirect('/dashboard.html');
   } catch (error) {
     console.error('❌ Microsoft OAuth failed:', error);
@@ -587,7 +595,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     res.json({
       success: true,
       message: 'Password reset email sent',
-      resetToken: NODE_ENV === 'development' ? resetToken : undefined, // Only in dev
+      resetToken: NODE_ENV === 'development' ? resetToken : undefined,
     });
   } catch (error) {
     console.error('❌ Forgot password error:', error);
@@ -791,7 +799,8 @@ app.post('/api/calendars/google/sync', authenticateToken, async (req, res) => {
       await pool.query(
         `INSERT INTO calendar_integrations (user_id, provider, calendar_id, calendar_name, is_primary)
          VALUES ($1, 'google', $2, $3, $4)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT (user_id, provider, calendar_id) DO UPDATE
+         SET calendar_name = $3, is_primary = $4`,
         [req.user.userId, cal.id, cal.name, cal.primary]
       );
     }
@@ -799,6 +808,43 @@ app.post('/api/calendars/google/sync', authenticateToken, async (req, res) => {
     res.json({ success: true, calendars });
   } catch (error) {
     console.error('❌ Error syncing Google calendars:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Sync Microsoft Calendar
+app.post('/api/calendars/microsoft/sync', authenticateToken, async (req, res) => {
+  if (!microsoftAuth) {
+    return res.status(501).json({ error: 'Microsoft integration not available' });
+  }
+
+  try {
+    const userResult = await pool.query(
+      'SELECT microsoft_access_token FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+
+    if (userResult.rows.length === 0 || !userResult.rows[0].microsoft_access_token) {
+      return res.status(401).json({ error: 'Microsoft account not connected' });
+    }
+
+    const user = userResult.rows[0];
+    const calendars = await microsoftAuth.getCalendarList(user.microsoft_access_token);
+
+    // Save calendars to database
+    for (const cal of calendars) {
+      await pool.query(
+        `INSERT INTO calendar_integrations (user_id, provider, calendar_id, calendar_name, is_primary)
+         VALUES ($1, 'microsoft', $2, $3, $4)
+         ON CONFLICT (user_id, provider, calendar_id) DO UPDATE
+         SET calendar_name = $3, is_primary = $4`,
+        [req.user.userId, cal.id, cal.name, cal.primary]
+      );
+    }
+
+    res.json({ success: true, calendars });
+  } catch (error) {
+    console.error('❌ Error syncing Microsoft calendars:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
