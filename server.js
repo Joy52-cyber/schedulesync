@@ -1,2196 +1,932 @@
-﻿// server.js
+﻿// ============================================================================
+// ScheduleSync API Server
+// Clean, production-ready implementation with Google OAuth fix
+// ============================================================================
+
 require('dotenv').config();
 
-// Debug: Show database connection string being used
-const dbUrl = process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL;
-console.log('🔍 DB Connection:', dbUrl?.substring(0, 80) + '...');
+const express = require('express');
+const cors = require('cors');
+const cookieParser = require('cookie-parser'); // 🔥 CRITICAL for OAuth!
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const { Pool } = require('pg');
+const path = require('path');
 
-// Google Auth service (optional - gracefully handles if not configured)
+// ============================================================================
+// SERVICES (Optional imports - gracefully handle if missing)
+// ============================================================================
+
 let googleAuth = null;
 try {
   googleAuth = require('./google-auth-service');
   console.log('✅ Google Auth service loaded');
 } catch (error) {
   console.log('⚠️  Google Auth service not found - OAuth will be disabled');
-  console.log('   Error:', error.message);
 }
 
-const express = require('express');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
-const path = require('path');
+let microsoftAuth = null;
+try {
+  microsoftAuth = require('./microsoft-auth-service');
+  console.log('✅ Microsoft Auth service loaded');
+} catch (error) {
+  console.log('ℹ️  Microsoft Auth service not found');
+}
 
-// Email service (optional - gracefully handles if not configured)
 let emailService = null;
 try {
   emailService = require('./email-service');
   console.log('✅ Email service loaded');
 } catch (error) {
   console.log('ℹ️  Email service not found - emails will be disabled');
-  console.log('   Error:', error.message);
 }
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'schedulesync-secret-change-in-production';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Database connection
+const pool = new Pool({
+  connectionString: process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL,
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
+
+// Google OAuth config
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL;
+
+// Microsoft OAuth config
+const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
+const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
+const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI;
+
+// ============================================================================
+// EXPRESS APP SETUP
+// ============================================================================
 
 const app = express();
 
-/* ---------------------------------- Config --------------------------------- */
-const clean = (v) => (v || '').trim();
-
-const PORT = process.env.PORT || 8080;
-const JWT_SECRET = clean(process.env.JWT_SECRET) || 'schedulesync-secret-2025';
-
-// Database - Use DB_CONNECTION_STRING (to bypass Railway auto-injection) or fallback to DATABASE_URL
-const pool = new Pool({
-  connectionString: process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
-
-// Google - Support both variable names
-const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
-const GOOGLE_CLIENT_SECRET = clean(process.env.GOOGLE_CLIENT_SECRET);
-const GOOGLE_REDIRECT_URI  = clean(process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL);
-
-// Microsoft
-const MICROSOFT_CLIENT_ID     = clean(process.env.MICROSOFT_CLIENT_ID);
-const MICROSOFT_CLIENT_SECRET = clean(process.env.MICROSOFT_CLIENT_SECRET);
-const MICROSOFT_CALLBACK_URL  = clean(process.env.MICROSOFT_CALLBACK_URL);
-
-/* ------------------------------ App Middleware ----------------------------- */
-app.use(cors());
+// Middleware - ORDER MATTERS!
 app.use(express.json());
-app.use(express.static('public'));
-app.set('trust proxy', 1);
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // 🔥 CRITICAL - Must be before routes!
 
-/* --------------------------------- Logging -------------------------------- */
-console.log('🚀 ScheduleSync API Starting...');
-console.log(`📡 Will listen on port ${PORT}`);
-console.log('\n📋 Environment Variables Check:');
-console.log(`  GOOGLE_CLIENT_ID:        ${GOOGLE_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
-console.log(`  GOOGLE_CLIENT_SECRET:    ${GOOGLE_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
-console.log(`  GOOGLE_REDIRECT_URI:     ${GOOGLE_REDIRECT_URI ? '✅ Found' : '❌ Missing'}`);
-console.log(`  MICROSOFT_CLIENT_ID:     ${MICROSOFT_CLIENT_ID ? '✅ Found' : '❌ Missing'}`);
-console.log(`  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET ? '✅ Found' : '❌ Missing'}`);
-console.log(`  MICROSOFT_CALLBACK_URL:  ${MICROSOFT_CALLBACK_URL ? '✅ Found' : '❌ Missing'}`);
-console.log();
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true,
+}));
 
-/* ------------------------------ DB Bootstrap ------------------------------ */
-let dbReady = false;
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
-(async () => {
-  try {
-    await pool.query('SELECT NOW()');
-    console.log('✅ Database connected');
-    await initDatabase();
-    dbReady = true;
-    console.log('✅ Database schema ready');
-    await ensureTestUser();
-  } catch (err) {
-    console.error('❌ Database init error:', err.message);
-  }
-})();
+// ============================================================================
+// DATABASE INITIALIZATION
+// ============================================================================
 
 async function initDatabase() {
-  // Users table with Google OAuth columns
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      email VARCHAR(255) UNIQUE NOT NULL,
-      password VARCHAR(255),
-      google_id VARCHAR(255) UNIQUE,
-      google_access_token TEXT,
-      google_refresh_token TEXT,
-      default_calendar_id VARCHAR(255),
-      profile_picture TEXT,
-      timezone VARCHAR(100) DEFAULT 'UTC',
-      working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb,
-      booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb,
-      created_at TIMESTAMP DEFAULT NOW()
-    )`);
-  
-  // Add Google OAuth columns if table already exists
   try {
-    await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`);
-  } catch (e) { /* Already nullable */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_calendar_id VARCHAR(255)`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC'`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb`);
-  } catch (e) { /* Already exists */ }
-  
-  // Add Microsoft OAuth columns if they don't exist
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_id VARCHAR(255) UNIQUE`);
-    console.log('✅ Added microsoft_id column');
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_access_token TEXT`);
-    console.log('✅ Added microsoft_access_token column');
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_refresh_token TEXT`);
-    console.log('✅ Added microsoft_refresh_token column');
-  } catch (e) { /* Already exists */ }
-  
-  // Add password reset token columns
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`);
-    console.log('✅ Added reset_token column');
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`);
-    console.log('✅ Added reset_token_expires column');
-  } catch (e) { /* Already exists */ }
-  
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS teams (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      owner_id INTEGER REFERENCES users(id),
-      public_url VARCHAR(255) UNIQUE,
-      created_at TIMESTAMP DEFAULT NOW()
-    )`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS team_members (
-      id SERIAL PRIMARY KEY,
-      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role VARCHAR(50) DEFAULT 'member',
-      joined_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(team_id, user_id)
-    )`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS time_slots (
-      id SERIAL PRIMARY KEY,
-      team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      slot_start TIMESTAMP,
-      slot_end TIMESTAMP,
-      day_of_week INTEGER,
-      start_time TIME,
-      end_time TIME,
-      is_available BOOLEAN DEFAULT true,
-      created_at TIMESTAMP DEFAULT NOW()
-    )`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id SERIAL PRIMARY KEY,
-      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-      slot_id INTEGER REFERENCES time_slots(id) ON DELETE SET NULL,
-      guest_name VARCHAR(255) NOT NULL,
-      guest_email VARCHAR(255) NOT NULL,
-      guest_notes TEXT,
-      booking_date DATE,
-      booking_time VARCHAR(50),
-      calendar_event_id VARCHAR(255),
-      meet_link TEXT,
-      status VARCHAR(50) DEFAULT 'pending',
-      created_at TIMESTAMP DEFAULT NOW()
-    )`);
-  
-  // Add columns to bookings if table already exists
-  try {
-    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
-  } catch (e) { /* Already exists */ }
-  
-  try {
-    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meet_link TEXT`);
-  } catch (e) { /* Already exists */ }
-  
-  // Add new columns to time_slots for weekly availability
-  try {
-    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS day_of_week INTEGER`);
-    console.log('✅ Added day_of_week column');
-  } catch (e) { 
-    if (e.code !== '42701') console.log('⚠️  day_of_week column issue:', e.message);
-  }
-  try {
-    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS start_time TIME`);
-    console.log('✅ Added start_time column');
-  } catch (e) { 
-    if (e.code !== '42701') console.log('⚠️  start_time column issue:', e.message);
-  }
-  try {
-    await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS end_time TIME`);
-    console.log('✅ Added end_time column');
-  } catch (e) { 
-    if (e.code !== '42701') console.log('⚠️  end_time column issue:', e.message);
-  }
-  try {
-    await pool.query(`ALTER TABLE time_slots ALTER COLUMN team_id DROP NOT NULL`);
-  } catch (e) { /* Already nullable */ }
-  try {
-    await pool.query(`ALTER TABLE time_slots ALTER COLUMN slot_start DROP NOT NULL`);
-  } catch (e) { /* Already nullable */ }
-  try {
-    await pool.query(`ALTER TABLE time_slots ALTER COLUMN slot_end DROP NOT NULL`);
-  } catch (e) { /* Already nullable */ }
-  
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS calendar_connections (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      provider VARCHAR(50) NOT NULL,
-      access_token TEXT NOT NULL,
-      refresh_token TEXT,
-      token_expiry TIMESTAMP,
-      calendar_id VARCHAR(255),
-      email VARCHAR(255),
-      last_synced TIMESTAMP,
-      is_active BOOLEAN DEFAULT true,
-      created_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(user_id, provider)
-    )`);
-  
-  // Create index on google_id
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
-  
-  console.log('✅ Database schema migrated');
-}
+    // Users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255),
+        google_id VARCHAR(255),
+        google_access_token TEXT,
+        google_refresh_token TEXT,
+        microsoft_id VARCHAR(255),
+        microsoft_access_token TEXT,
+        microsoft_refresh_token TEXT,
+        profile_picture TEXT,
+        timezone VARCHAR(100) DEFAULT 'UTC',
+        reset_token VARCHAR(255),
+        reset_token_expiry TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-async function ensureTestUser() {
-  const testEmail = 'test@example.com';
-  const existing = await pool.query('SELECT id FROM users WHERE email=$1', [testEmail]);
-  if (!existing.rowCount) {
-    await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1,$2,$3)',
-      ['Test User', testEmail, 'password123']
-    );
-    console.log('👤 Test user created: test@example.com / password123');
+    // Bookings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        start_time TIMESTAMP NOT NULL,
+        end_time TIMESTAMP NOT NULL,
+        attendee_email VARCHAR(255),
+        attendee_name VARCHAR(255),
+        meet_link TEXT,
+        calendar_event_id TEXT,
+        status VARCHAR(50) DEFAULT 'confirmed',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Calendar integrations table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS calendar_integrations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        provider VARCHAR(50) NOT NULL,
+        calendar_id VARCHAR(255) NOT NULL,
+        calendar_name VARCHAR(255),
+        is_primary BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    console.log('✅ Database schema initialized');
+  } catch (error) {
+    console.error('❌ Database initialization error:', error.message);
+    throw error;
   }
 }
 
-/* ------------------------------ Auth Helpers ------------------------------ */
+// Initialize database on startup
+initDatabase();
+
+// ============================================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================================
+
 function authenticateToken(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'No token provided' });
+  const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
-    req.userId = decoded.userId;
     next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
-/* --------------------------- Time Parsing Helper --------------------------- */
-function parseDateAndTimeToTimestamp(dateStr, timeStr) {
-  if (!dateStr || !timeStr) return null;
+// ============================================================================
+// GOOGLE OAUTH ROUTES
+// ============================================================================
 
-  const parts = String(timeStr).trim().split(/\s+/);
-  if (parts.length < 2) return null;
-
-  const [hm, ampmRaw] = parts;
-  const [hRaw, mRaw = '0'] = hm.split(':');
-  let h = parseInt(hRaw, 10);
-  const m = parseInt(mRaw, 10);
-  const ampm = (ampmRaw || '').toUpperCase();
-
-  if (isNaN(h) || isNaN(m)) return null;
-
-  if (ampm === 'PM' && h < 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
-
-  const hh = String(h).padStart(2, '0');
-  const mm = String(m).padStart(2, '0');
-
-  const d = new Date(`${dateStr}T${hh}:${mm}:00Z`);
-  if (isNaN(d.getTime())) return null;
-
-  const toTS = (dt) => {
-    const yyyy = dt.getUTCFullYear();
-    const mo   = String(dt.getUTCMonth() + 1).padStart(2, '0');
-    const dd   = String(dt.getUTCDate()).padStart(2, '0');
-    const HH   = String(dt.getUTCHours()).padStart(2, '0');
-    const MM   = String(dt.getUTCMinutes()).padStart(2, '0');
-    const SS   = String(dt.getUTCSeconds()).padStart(2, '0');
-    return `${yyyy}-${mo}-${dd} ${HH}:${MM}:${SS}`;
-  };
-
-  const start = d;
-  const end   = new Date(d.getTime() + 60 * 60000);
-
-  return { start: toTS(start), end: toTS(end) };
-}
-
-/* ----------------------------- Config Guards ------------------------------ */
-function assertGoogleConfigured(res) {
-  const missing = [];
-  if (!GOOGLE_CLIENT_ID)     missing.push('GOOGLE_CLIENT_ID');
-  if (!GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET');
-  if (!GOOGLE_REDIRECT_URI)  missing.push('GOOGLE_REDIRECT_URI');
-  if (missing.length) {
-    res.status(400).json({ ok: false, provider: 'google', message: 'Google Calendar not configured', missing });
-    return true;
+app.get('/auth/google', (req, res) => {
+  if (!googleAuth) {
+    return res.status(501).json({ error: 'Google OAuth not configured' });
   }
-  return false;
-}
-function assertMicrosoftConfigured(res) {
-  const missing = [];
-  if (!MICROSOFT_CLIENT_ID)     missing.push('MICROSOFT_CLIENT_ID');
-  if (!MICROSOFT_CLIENT_SECRET) missing.push('MICROSOFT_CLIENT_SECRET');
-  if (!MICROSOFT_CALLBACK_URL)  missing.push('MICROSOFT_CALLBACK_URL');
-  if (missing.length) {
-    res.status(400).json({ ok: false, provider: 'microsoft', message: 'Microsoft Outlook not configured', missing });
-    return true;
-  }
-  return false;
-}
 
-/* --------------------------------- Health --------------------------------- */
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', env: process.env.NODE_ENV || 'development', time: new Date().toISOString(), dbReady });
-});
-app.get('/ready', (_req, res) => res.json({ status: 'ready' }));
-
-/* --------------------------------- Root ----------------------------------- */
-app.get('/', (_req, res) => {
-  res.json({
-    status: 'ScheduleSync API Running',
-    config: {
-      google:    !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI),
-      microsoft: !!(MICROSOFT_CLIENT_ID && MICROSOFT_CLIENT_SECRET && MICROSOFT_CALLBACK_URL),
-      database:  dbReady
-    }
-  });
-});
-
-/* ---------------------------- Auth (Basic Demo) ---------------------------- */
-app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password) return res.status(400).json({ error: 'Missing fields' });
-    const out = await pool.query(
-      'INSERT INTO users (name,email,password) VALUES ($1,$2,$3) RETURNING id,name,email',
-      [name, email, password]
+    const authUrl = googleAuth.getAuthUrl();
+    console.log('🔗 Redirecting to Google OAuth');
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('❌ Error generating Google auth URL:', error);
+    res.redirect('/login?error=oauth_config_error');
+  }
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code, error } = req.query;
+
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 Google OAuth Callback');
+  console.log('Code:', code ? code.substring(0, 30) + '...' : 'NONE');
+  console.log('Error:', error || 'NONE');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  if (error || !code) {
+    console.error('❌ OAuth error or no code');
+    return res.redirect('/login?error=oauth_failed');
+  }
+
+  try {
+    // Step 1: Exchange code for tokens
+    console.log('📝 Step 1: Getting tokens...');
+    const tokens = await googleAuth.getTokensFromCode(code);
+    console.log('✅ Tokens received');
+
+    // Step 2: Get user info
+    console.log('📝 Step 2: Getting user info...');
+    const userInfo = await googleAuth.getUserInfo(tokens.access_token);
+    console.log('✅ User info:', userInfo.email);
+
+    // Step 3: Find or create user
+    console.log('📝 Step 3: Finding/creating user...');
+    let userResult = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [userInfo.email]
     );
-    const token = jwt.sign({ userId: out.rows[0].id }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ success: true, token, user: out.rows[0] });
-  } catch (e) {
-    if (e.code === '23505') return res.status(409).json({ error: 'Email already exists' });
-    res.status(500).json({ error: e.message });
+
+    let user;
+
+    if (userResult.rows.length > 0) {
+      // Update existing user
+      const updateResult = await pool.query(
+        `UPDATE users 
+         SET google_id = $1,
+             google_access_token = $2,
+             google_refresh_token = COALESCE($3, google_refresh_token),
+             name = $4,
+             profile_picture = $5
+         WHERE email = $6
+         RETURNING id, name, email, profile_picture`,
+        [
+          userInfo.google_id,
+          tokens.access_token,
+          tokens.refresh_token,
+          userInfo.name,
+          userInfo.picture,
+          userInfo.email,
+        ]
+      );
+      user = updateResult.rows[0];
+      console.log('✅ User updated:', user.id);
+    } else {
+      // Create new user
+      const insertResult = await pool.query(
+        `INSERT INTO users (name, email, google_id, google_access_token, google_refresh_token, profile_picture)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, name, email, profile_picture`,
+        [
+          userInfo.name,
+          userInfo.email,
+          userInfo.google_id,
+          tokens.access_token,
+          tokens.refresh_token,
+          userInfo.picture,
+        ]
+      );
+      user = insertResult.rows[0];
+      console.log('✅ New user created:', user.id);
+    }
+
+    // Step 4: Generate JWT
+    console.log('📝 Step 4: Generating JWT...');
+    const jwtToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Step 5: Set cookie and redirect
+    console.log('📝 Step 5: Setting cookie...');
+    res.cookie('token', jwtToken, {
+      httpOnly: true,
+      secure: NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    console.log('✅ ✅ ✅ Google OAuth SUCCESS:', user.email);
+    console.log('🎯 Redirecting to /dashboard.html');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    return res.redirect('/dashboard.html');
+  } catch (error) {
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ ❌ ❌ Google OAuth FAILED');
+    console.error('Error:', error.message);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    return res.redirect('/login?error=oauth_failed');
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+// ============================================================================
+// MICROSOFT OAUTH ROUTES
+// ============================================================================
+
+app.get('/auth/microsoft', (req, res) => {
+  if (!microsoftAuth) {
+    return res.status(501).json({ error: 'Microsoft OAuth not configured' });
+  }
+
   try {
-    const { email, password } = req.body || {};
-    
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
+    const authUrl = microsoftAuth.getAuthUrl();
+    console.log('🔗 Redirecting to Microsoft OAuth');
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('❌ Error generating Microsoft auth URL:', error);
+    res.redirect('/login?error=oauth_config_error');
+  }
+});
 
-    // Check if user exists
-    const out = await pool.query('SELECT id, name, email, password FROM users WHERE email = $1', [email]);
-    
-    if (!out.rowCount) {
-      console.log('❌ Login failed: No account found with email:', email);
-      return res.status(401).json({ 
-        error: 'No account found with this email address',
-        type: 'email_not_found'
-      });
-    }
+app.get('/auth/microsoft/callback', async (req, res) => {
+  const { code, error } = req.query;
 
-    const user = out.rows[0];
+  console.log('🔍 Microsoft OAuth Callback');
+  console.log('Code:', code ? 'Received' : 'NONE');
 
-    // Check if user has a password set
-    if (!user.password) {
-      console.log('⚠️ Login failed: No password set for user:', email);
-      return res.status(401).json({ 
-        error: 'Please use Google or Microsoft sign-in, or reset your password',
-        type: 'no_password'
-      });
-    }
+  if (error || !code) {
+    console.error('❌ OAuth error or no code');
+    return res.redirect('/login?error=oauth_failed');
+  }
 
-    // Check if password is hashed (starts with $2b$ for bcrypt)
-    let passwordValid = false;
-    if (user.password.startsWith('$2b$')) {
-      // Hashed password - use bcrypt compare
-      passwordValid = await bcrypt.compare(password, user.password);
-      console.log(`🔐 Password check for ${email}:`, passwordValid ? 'Valid ✅' : 'Invalid ❌');
+  try {
+    const tokens = await microsoftAuth.getTokensFromCode(code);
+    const userInfo = await microsoftAuth.getUserInfo(tokens.access_token);
+
+    let userResult = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [userInfo.email]
+    );
+
+    let user;
+
+    if (userResult.rows.length > 0) {
+      const updateResult = await pool.query(
+        `UPDATE users 
+         SET microsoft_id = $1,
+             microsoft_access_token = $2,
+             microsoft_refresh_token = COALESCE($3, microsoft_refresh_token),
+             name = $4
+         WHERE email = $5
+         RETURNING id, name, email`,
+        [
+          userInfo.microsoft_id,
+          tokens.access_token,
+          tokens.refresh_token,
+          userInfo.name,
+          userInfo.email,
+        ]
+      );
+      user = updateResult.rows[0];
     } else {
-      // Plain text password (old accounts) - direct compare
-      passwordValid = user.password === password;
-      console.log(`🔓 Plain text password check for ${email}:`, passwordValid ? 'Valid ✅' : 'Invalid ❌');
-      
-      // If valid, upgrade to hashed password
+      const insertResult = await pool.query(
+        `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, name, email`,
+        [
+          userInfo.name,
+          userInfo.email,
+          userInfo.microsoft_id,
+          tokens.access_token,
+          tokens.refresh_token,
+        ]
+      );
+      user = insertResult.rows[0];
+    }
+
+    const jwtToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('token', jwtToken, {
+      httpOnly: true,
+      secure: NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    console.log('✅ Microsoft OAuth SUCCESS:', user.email);
+    return res.redirect('/dashboard.html');
+  } catch (error) {
+    console.error('❌ Microsoft OAuth failed:', error);
+    return res.redirect('/login?error=oauth_failed');
+  }
+});
+
+// ============================================================================
+// EMAIL/PASSWORD AUTHENTICATION
+// ============================================================================
+
+// Sign up
+app.post('/api/auth/signup', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  try {
+    // Check if user exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      [name, email, hashedPassword]
+    );
+
+    const user = result.rows[0];
+
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    console.log('✅ New user signed up:', email);
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Signup error:', error);
+    res.status(500).json({ error: 'Server error during signup' });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+    if (result.rows.length === 0) {
+      console.log('❌ Login failed: Email not found:', email);
+      return res.status(401).json({
+        error: 'email_not_found',
+        message: 'No account found with this email',
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password) {
+      console.log('❌ Login failed: No password (OAuth account):', email);
+      return res.status(401).json({
+        error: 'no_password',
+        message: 'This account was created with Google/Microsoft. Please sign in with that provider.',
+      });
+    }
+
+    // Check password
+    const isHashed = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
+    let passwordValid = false;
+
+    if (isHashed) {
+      passwordValid = await bcrypt.compare(password, user.password);
+      console.log(`🔐 Login attempt for ${email}: ${passwordValid ? 'Valid ✅' : 'Invalid ❌'} (hashed)`);
+    } else {
+      // Legacy plain text password
+      passwordValid = password === user.password;
+      console.log(`🔐 Login attempt for ${email}: ${passwordValid ? 'Valid ✅' : 'Invalid ❌'} (plain text)`);
+
       if (passwordValid) {
+        // Upgrade to hashed password
         const hashedPassword = await bcrypt.hash(password, 10);
         await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
-        console.log('✅ Upgraded password to hashed for user:', user.email);
+        console.log(`✅ Upgraded password to hashed for: ${email}`);
       }
     }
 
     if (!passwordValid) {
       console.log('❌ Login failed: Incorrect password for:', email);
-      return res.status(401).json({ 
-        error: 'Incorrect password. Please try again or use "Forgot password?"',
-        type: 'wrong_password'
+      return res.status(401).json({
+        error: 'wrong_password',
+        message: 'Incorrect password',
       });
     }
 
-    console.log('✅ Login successful for user:', email);
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ 
-      success: true, 
-      token, 
-      user: { 
-        id: user.id, 
-        name: user.name, 
-        email: user.email 
-      } 
-    });
-  } catch (e) {
-    console.error('Login error:', e);
-    res.status(500).json({ error: 'Login failed' });
-  }
-});
-
-app.get('/api/users/me', authenticateToken, async (req, res) => {
-  const out = await pool.query('SELECT id,name,email,profile_picture,default_calendar_id FROM users WHERE id=$1', [req.userId]);
-  if (!out.rowCount) return res.status(404).json({ error: 'User not found' });
-  res.json({ user: out.rows[0] });
-});
-
-/* ============================ GOOGLE OAUTH ROUTES ============================ */
-
-// Initiate Google OAuth flow
-app.get('/auth/google', (req, res) => {
-  if (!googleAuth) {
-    return res.status(503).json({ error: 'Google OAuth not configured', message: 'google-auth-service.js is missing' });
-  }
-  try {
-    const authUrl = googleAuth.getAuthUrl();
-    res.redirect(authUrl);
-  } catch (error) {
-    console.error('Error generating auth URL:', error);
-    res.redirect('/login?error=oauth_failed');
-  }
-});
-
-// Check if email exists
-app.post('/api/auth/check-email', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    res.json({ exists: result.rows.length > 0 });
-  } catch (error) {
-    console.error('Error checking email:', error);
-    res.status(500).json({ error: 'Failed to check email' });
-  }
-});
-
-// Forgot Password - Send reset email
-app.post('/api/auth/forgot-password', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // Check if user exists
-    const userResult = await pool.query('SELECT id, name, email FROM users WHERE email = $1', [email]);
-
-    if (userResult.rows.length === 0) {
-      // For security, return success even if user doesn't exist
-      return res.json({ success: true, message: 'If an account exists, a reset link has been sent' });
-    }
-
-    const user = userResult.rows[0];
-
-    // Generate reset token
-    const resetToken = jwt.sign({ userId: user.id, type: 'password_reset' }, JWT_SECRET, { expiresIn: '1h' });
-    
-    // Store reset token in database (optional - for extra security)
-    await pool.query(
-      'UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL \'1 hour\' WHERE id = $2',
-      [resetToken, user.id]
-    );
-
-    // Create reset link
-    const resetLink = `https://schedulesync-production.up.railway.app/reset-password?token=${resetToken}`;
-
-    // Send email using nodemailer directly
-    if (emailService && emailService.sendPasswordReset) {
-      // If email service has password reset method, use it
-      try {
-        await emailService.sendPasswordReset(email, user.name, resetLink);
-        console.log('✅ Password reset email sent to:', email);
-        res.json({ success: true, message: 'Password reset link sent' });
-      } catch (error) {
-        console.error('❌ Failed to send email:', error);
-        // Still return success but log the link for testing
-        console.log('🔗 Password reset link:', resetLink);
-        res.json({ success: true, message: 'Password reset link generated' });
-      }
-    } else {
-      // Email service not available - log the link for testing
-      console.log('ℹ️  Email service not configured');
-      console.log('🔗 Password reset link (copy this):', resetLink);
-      res.json({ success: true, message: 'Password reset link generated', resetLink: resetLink });
-    }
-  } catch (error) {
-    console.error('Error in forgot password:', error);
-    res.status(500).json({ error: 'Failed to process request' });
-  }
-});
-
-// Reset Password - Actually reset the password
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, password } = req.body;
-
-    if (!token || !password) {
-      return res.status(400).json({ error: 'Token and password are required' });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    }
-
-    // Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-      if (decoded.type !== 'password_reset') {
-        return res.status(400).json({ error: 'Invalid token type' });
-      }
-    } catch (error) {
-      return res.status(400).json({ error: 'Invalid or expired token' });
-    }
-
-    // Check if token matches and hasn't expired
-    const userResult = await pool.query(
-      'SELECT id, reset_token, reset_token_expires FROM users WHERE id = $1',
-      [decoded.userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
-
-    // Check if token matches (optional extra security)
-    if (user.reset_token !== token) {
-      return res.status(400).json({ error: 'Token mismatch' });
-    }
-
-    // Check if token expired
-    if (new Date() > new Date(user.reset_token_expires)) {
-      return res.status(400).json({ error: 'Token has expired. Please request a new password reset.' });
-    }
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Get user info for email
-    const userInfo = await pool.query('SELECT name, email FROM users WHERE id = $1', [decoded.userId]);
-    const userName = userInfo.rows[0]?.name || 'User';
-    const userEmail = userInfo.rows[0]?.email;
-
-    // Update password and clear reset token
-    await pool.query(
-      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
-      [hashedPassword, decoded.userId]
-    );
-
-    // Send confirmation email
-    if (emailService && emailService.sendPasswordChanged && userEmail) {
-      emailService.sendPasswordChanged(userEmail, userName)
-        .catch(err => console.error('Failed to send password changed email:', err));
-    }
-
-    console.log('✅ Password reset successfully for user:', decoded.userId);
-    res.json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    console.error('Error resetting password:', error);
-    res.status(500).json({ error: 'Failed to reset password' });
-  }
-});
-
-// Google OAuth callback - handles the redirect from Google
-app.get('/auth/google/callback', async (req, res) => {
-  if (!googleAuth) {
-    return res.redirect('/login?error=oauth_not_configured');
-  }
-  try {
-    const { code } = req.query;
-    
-    if (!code) {
-      return res.redirect('/login?error=no_code');
-    }
-
-    console.log('📥 Google OAuth callback received');
-
-    // Exchange code for tokens
-    const tokens = await googleAuth.getTokensFromCode(code);
-    console.log('✅ Got tokens from Google');
-
-    // Get user info from Google
-    const userInfo = await googleAuth.getUserInfo(tokens.access_token);
-    console.log('✅ Got user info:', userInfo.email);
-
-    // Check if user exists in database
-    let user = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [userInfo.email]
-    );
-
-    if (user.rows.length === 0) {
-      // Create new user
-      console.log('➕ Creating new user:', userInfo.email);
-      const result = await pool.query(
-        `INSERT INTO users (email, name, google_id, google_access_token, google_refresh_token, profile_picture) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
-         RETURNING *`,
-        [
-          userInfo.email,
-          userInfo.name,
-          userInfo.google_id,
-          tokens.access_token,
-          tokens.refresh_token,
-          userInfo.picture
-        ]
-      );
-      user = result;
-    } else {
-      // Update existing user with Google tokens
-      console.log('🔄 Updating existing user:', userInfo.email);
-      const result = await pool.query(
-        `UPDATE users 
-         SET google_id = $1, google_access_token = $2, google_refresh_token = $3, profile_picture = $4, name = $5
-         WHERE email = $6 
-         RETURNING *`,
-        [
-          userInfo.google_id,
-          tokens.access_token,
-          tokens.refresh_token,
-          userInfo.picture,
-          userInfo.name,
-          userInfo.email
-        ]
-      );
-      user = result;
-    }
-
-    const dbUser = user.rows[0];
-    console.log('✅ User saved to database, ID:', dbUser.id);
-
-    // Create JWT token for session
+    // Generate JWT
     const token = jwt.sign(
-      { userId: dbUser.id, email: dbUser.email },
+      { userId: user.id, email: user.email, name: user.name },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Redirect to calendar setup page
-    console.log('➡️  Redirecting to calendar setup');
-    res.redirect(`/calendar-setup?token=${token}`);
+    console.log('✅ ✅ Login successful:', email);
 
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        profile_picture: user.profile_picture,
+      },
+    });
   } catch (error) {
-    console.error('❌ OAuth callback error:', error);
-    res.redirect('/login?error=oauth_callback_failed');
+    console.error('❌ Login error:', error);
+    res.status(500).json({ error: 'server_error', message: 'Server error during login' });
   }
 });
 
-/* ============================= CALENDAR API ================================= */
+// ============================================================================
+// PASSWORD RESET
+// ============================================================================
 
-// Get user's Google Calendars
-app.get('/api/calendars', authenticateToken, async (req, res) => {
-  if (!googleAuth) {
-    return res.status(503).json({ error: 'Google OAuth not configured' });
+// Request password reset
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
   }
-  try {
-    console.log('📅 Fetching calendars for user:', req.user.userId);
 
-    // Get user's Google tokens from database
-    const user = await pool.query(
-      'SELECT google_access_token, google_refresh_token FROM users WHERE id = $1',
+  try {
+    const result = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'email_not_found', message: 'No account with this email' });
+    }
+
+    const user = result.rows[0];
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+
+    await pool.query(
+      'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
+      [resetToken, resetTokenExpiry, user.id]
+    );
+
+    // Send email if service available
+    if (emailService) {
+      try {
+        await emailService.sendPasswordResetEmail(email, user.name, resetToken);
+        console.log('✅ Password reset email sent to:', email);
+      } catch (emailError) {
+        console.error('❌ Failed to send reset email:', emailError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Password reset email sent',
+      resetToken: NODE_ENV === 'development' ? resetToken : undefined, // Only in dev
+    });
+  } catch (error) {
+    console.error('❌ Forgot password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Verify reset token
+app.post('/api/auth/verify-reset-token', async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Token is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, email, name, reset_token_expiry FROM users WHERE reset_token = $1',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'invalid_token', message: 'Invalid reset token' });
+    }
+
+    const user = result.rows[0];
+
+    if (new Date() > new Date(user.reset_token_expiry)) {
+      return res.status(410).json({ error: 'expired_token', message: 'Reset token has expired' });
+    }
+
+    res.json({
+      valid: true,
+      email: user.email,
+      name: user.name,
+    });
+  } catch (error) {
+    console.error('❌ Verify token error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Reset password
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: 'Token and new password are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, email, reset_token_expiry FROM users WHERE reset_token = $1',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'invalid_token', message: 'Invalid reset token' });
+    }
+
+    const user = result.rows[0];
+
+    if (new Date() > new Date(user.reset_token_expiry)) {
+      return res.status(410).json({ error: 'expired_token', message: 'Reset token has expired' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear reset token
+    await pool.query(
+      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id = $2',
+      [hashedPassword, user.id]
+    );
+
+    console.log('✅ Password reset successfully for:', user.email);
+
+    // Send confirmation email if service available
+    if (emailService) {
+      try {
+        await emailService.sendPasswordChangedEmail(user.email);
+        console.log('✅ Password changed confirmation sent to:', user.email);
+      } catch (emailError) {
+        console.error('❌ Failed to send confirmation email:', emailError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully',
+    });
+  } catch (error) {
+    console.error('❌ Reset password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ============================================================================
+// AUTH VERIFICATION & USER INFO
+// ============================================================================
+
+// Verify JWT token
+app.get('/api/auth/verify', (req, res) => {
+  const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      authenticated: false,
+      error: 'No token provided',
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    res.json({
+      authenticated: true,
+      user: {
+        id: decoded.userId,
+        email: decoded.email,
+        name: decoded.name,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Token verification failed:', error.message);
+    res.status(401).json({
+      authenticated: false,
+      error: 'Invalid or expired token',
+    });
+  }
+});
+
+// Get current user profile
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email, profile_picture, timezone, created_at FROM users WHERE id = $1',
       [req.user.userId]
     );
 
-    if (user.rows.length === 0 || !user.rows[0].google_refresh_token) {
-      console.log('❌ No Google tokens found');
-      return res.status(401).json({ error: 'Google Calendar not connected', needsReauth: true });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const { google_access_token, google_refresh_token } = user.rows[0];
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Error getting user profile:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
-    // Fetch calendars from Google
-    const calendars = await googleAuth.getCalendarList(
-      google_access_token,
-      google_refresh_token
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// ============================================================================
+// CALENDAR ENDPOINTS
+// ============================================================================
+
+// Get connected calendars
+app.get('/api/calendars', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM calendar_integrations WHERE user_id = $1 AND is_active = true',
+      [req.user.userId]
     );
 
-    console.log(`✅ Found ${calendars.length} calendars`);
-    res.json(calendars);
-
+    res.json({ calendars: result.rows });
   } catch (error) {
     console.error('❌ Error fetching calendars:', error);
-    
-    // If token expired, ask for reauth
-    if (error.message?.includes('invalid_grant') || error.message?.includes('Token has been expired')) {
-      return res.status(401).json({ 
-        error: 'Calendar access expired', 
-        needsReauth: true 
-      });
-    }
-    
-    res.status(500).json({ error: 'Failed to fetch calendars' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Save user's selected default calendar
-app.put('/api/user/calendar', authenticateToken, async (req, res) => {
-  try {
-    const { calendar_id } = req.body;
-    
-    if (!calendar_id) {
-      return res.status(400).json({ error: 'Calendar ID required' });
-    }
-
-    console.log('💾 Saving calendar:', calendar_id, 'for user:', req.user.userId);
-
-    // Update user's default calendar
-    await pool.query(
-      'UPDATE users SET default_calendar_id = $1 WHERE id = $2',
-      [calendar_id, req.user.userId]
-    );
-
-    console.log('✅ Calendar saved');
-    res.json({ success: true, calendar_id });
-
-  } catch (error) {
-    console.error('❌ Error saving calendar:', error);
-    res.status(500).json({ error: 'Failed to save calendar' });
-  }
-});
-
-// Get free/busy information for availability checking
-app.post('/api/calendar/freebusy', authenticateToken, async (req, res) => {
+// Sync Google Calendar
+app.post('/api/calendars/google/sync', authenticateToken, async (req, res) => {
   if (!googleAuth) {
-    return res.status(503).json({ error: 'Google OAuth not configured' });
+    return res.status(501).json({ error: 'Google integration not available' });
   }
+
   try {
-    const { calendar_id, time_min, time_max } = req.body;
-
-    console.log('🔍 Checking free/busy for user:', req.user.userId);
-
-    // Get user's tokens
-    const user = await pool.query(
-      'SELECT google_access_token, google_refresh_token, default_calendar_id FROM users WHERE id = $1',
-      [req.user.userId]
-    );
-
-    if (user.rows.length === 0 || !user.rows[0].google_refresh_token) {
-      return res.status(401).json({ error: 'Google Calendar not connected' });
-    }
-
-    const { google_access_token, google_refresh_token, default_calendar_id } = user.rows[0];
-
-    // Fetch free/busy data
-    const busySlots = await googleAuth.getFreeBusy(
-      google_access_token,
-      google_refresh_token,
-      calendar_id || default_calendar_id,
-      time_min,
-      time_max
-    );
-
-    console.log(`✅ Found ${busySlots.length} busy slots`);
-    res.json({ busy: busySlots });
-
-  } catch (error) {
-    console.error('❌ Error fetching free/busy:', error);
-    res.status(500).json({ error: 'Failed to fetch availability' });
-  }
-});
-
-// Disconnect Google Calendar
-app.post('/api/user/disconnect-google', authenticateToken, async (req, res) => {
-  try {
-    console.log('🔌 Disconnecting Google for user:', req.user.userId);
-
-    await pool.query(
-      'UPDATE users SET google_id = NULL, google_access_token = NULL, google_refresh_token = NULL, default_calendar_id = NULL WHERE id = $1',
-      [req.user.userId]
-    );
-
-    console.log('✅ Google disconnected');
-    res.json({ success: true, message: 'Google Calendar disconnected' });
-
-  } catch (error) {
-    console.error('❌ Error disconnecting Google:', error);
-    res.status(500).json({ error: 'Failed to disconnect' });
-  }
-});
-
-/* ----------------------- Analytics (minimal demo) ------------------------- */
-app.get('/api/analytics/dashboard', async (req, res) => {
-  try {
-    const a = { totalBookings: 0, upcomingMeetings: 0, completedMeetings: 0, teamMembers: 0, recentActivity: [] };
-    try {
-      const r = await pool.query('SELECT COUNT(*) AS c FROM bookings');
-      a.totalBookings = parseInt(r.rows[0]?.c || 0);
-    } catch {}
-    try {
-      const r = await pool.query('SELECT COUNT(*) AS c FROM team_members');
-      a.teamMembers = parseInt(r.rows[0]?.c || 0);
-    } catch {}
-    res.json(a);
-  } catch (e) {
-    res.json({ totalBookings: 0, upcomingMeetings: 0, completedMeetings: 0, teamMembers: 0, recentActivity: [] });
-  }
-});
-
-/* ============================================================================
-   TEAMS API ENDPOINTS
-   ========================================================================== */
-
-// Get all teams for current user
-app.get('/api/teams', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const result = await pool.query(
-      `SELECT t.*, COUNT(tm.id) as member_count
-       FROM teams t
-       LEFT JOIN team_members tm ON t.id = tm.team_id
-       WHERE t.owner_id = $1
-       GROUP BY t.id
-       ORDER BY t.created_at DESC`,
-      [userId]
-    );
-    res.json({ teams: result.rows });
-  } catch (error) {
-    console.error('Error fetching teams:', error);
-    res.status(500).json({ error: 'Failed to fetch teams' });
-  }
-});
-
-// Get public team info (for booking page - must be BEFORE /api/teams/:id)
-app.get('/api/teams/:id/public', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Try to parse as integer, if it fails, it's a public_url string
-    const isNumeric = /^\d+$/.test(id);
-    
-    let result;
-    if (isNumeric) {
-      // Search by ID
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE id = $1',
-        [parseInt(id)]
-      );
-    } else {
-      // Search by public_url
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE public_url = $1',
-        [id]
-      );
-    }
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    res.json({ team: result.rows[0] });
-  } catch (error) {
-    console.error('Error fetching public team:', error);
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
-
-// Get single team by ID
-app.get('/api/teams/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.userId;
-    
-    // Get team info
-    const result = await pool.query(
-      `SELECT t.*, COUNT(tm.id) as member_count
-       FROM teams t
-       LEFT JOIN team_members tm ON t.id = tm.team_id
-       WHERE t.id = $1 AND t.owner_id = $2
-       GROUP BY t.id`,
-      [id, userId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    
-    res.json({ team: result.rows[0] });
-  } catch (error) {
-    console.error('Error fetching team:', error);
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
-
-// Create new team
-app.post('/api/teams', authenticateToken, async (req, res) => {
-  try {
-    const { name, description } = req.body;
-    const userId = req.userId;
-    const result = await pool.query(
-      `INSERT INTO teams (name, description, owner_id, public_url)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [name, description, userId, Math.random().toString(36).substring(7)]
-    );
-    res.status(201).json({ team: result.rows[0] });
-  } catch (error) {
-    console.error('Error creating team:', error);
-    res.status(500).json({ error: 'Failed to create team' });
-  }
-});
-
-// Update team
-app.put('/api/teams/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description } = req.body;
-    const userId = req.userId;
-    const result = await pool.query(
-      `UPDATE teams SET name = $1, description = $2
-       WHERE id = $3 AND owner_id = $4 RETURNING *`,
-      [name, description, id, userId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    res.json({ team: result.rows[0] });
-  } catch (error) {
-    console.error('Error updating team:', error);
-    res.status(500).json({ error: 'Failed to update team' });
-  }
-});
-
-// Delete team
-app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.userId;
-    const result = await pool.query(
-      'DELETE FROM teams WHERE id = $1 AND owner_id = $2 RETURNING *',
-      [id, userId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting team:', error);
-    res.status(500).json({ error: 'Failed to delete team' });
-  }
-});
-
-// Get team members
-app.get('/api/teams/:id/members', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `SELECT tm.*, u.name, u.email
-       FROM team_members tm
-       JOIN users u ON tm.user_id = u.id
-       WHERE tm.team_id = $1
-       ORDER BY tm.joined_at DESC`,
-      [id]
-    );
-    res.json({ members: result.rows });
-  } catch (error) {
-    console.error('Error fetching members:', error);
-    res.status(500).json({ error: 'Failed to fetch members' });
-  }
-});
-
-// Add team member
-app.post('/api/teams/:id/members', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { email, sendInvite } = req.body;
-    const currentUserId = req.userId;
-    
-    // Get team info
-    const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [id]);
-    if (teamResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    const team = teamResult.rows[0];
-    
-    // Get inviter info
-    const inviterResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [currentUserId]);
-    const inviter = inviterResult.rows[0];
-    
-    // Check if user exists
-    const userResult = await pool.query(
-      'SELECT id, name FROM users WHERE email = $1',
-      [email]
-    );
-    
-    if (userResult.rows.length === 0) {
-      // User doesn't exist - send invitation email
-      if (emailService && sendInvite !== false) {
-        await emailService.sendTeamInvitation(
-          email,
-          email.split('@')[0], // Use email prefix as name
-          team.name,
-          inviter.name,
-          team.id
-        ).catch(err => console.error('Email error:', err));
-      }
-      return res.status(404).json({ 
-        error: 'User not found',
-        invitationSent: !!emailService && sendInvite !== false,
-        message: 'Invitation email sent to user'
-      });
-    }
-    
-    const userId = userResult.rows[0].id;
-    const userName = userResult.rows[0].name;
-    
-    // Add to team
-    const result = await pool.query(
-      `INSERT INTO team_members (team_id, user_id, role)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [id, userId, 'member']
-    );
-    
-    // Send welcome email
-    if (emailService && sendInvite !== false) {
-      await emailService.sendTeamWelcome(
-        email,
-        userName,
-        team.name,
-        inviter.name
-      ).catch(err => console.error('Email error:', err));
-    }
-    
-    res.status(201).json({ 
-      member: result.rows[0],
-      emailSent: !!emailService && sendInvite !== false
-    });
-  } catch (error) {
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'User already in team' });
-    }
-    console.error('Error adding member:', error);
-    res.status(500).json({ error: 'Failed to add member' });
-  }
-});
-
-// Remove team member
-app.delete('/api/teams/:teamId/members/:memberId', authenticateToken, async (req, res) => {
-  try {
-    const { teamId, memberId } = req.params;
-    const currentUserId = req.userId;
-    
-    // Check if current user is team owner
-    const teamResult = await pool.query(
-      'SELECT owner_id FROM teams WHERE id = $1',
-      [teamId]
-    );
-    
-    if (teamResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    
-    const isOwner = teamResult.rows[0].owner_id === currentUserId;
-    
-    if (!isOwner) {
-      return res.status(403).json({ error: 'Only team owner can remove members' });
-    }
-    
-    // Delete the member
-    const result = await pool.query(
-      'DELETE FROM team_members WHERE id = $1 AND team_id = $2 RETURNING *',
-      [memberId, teamId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Member not found' });
-    }
-    
-    res.json({ success: true, message: 'Member removed from team' });
-  } catch (error) {
-    console.error('Error removing member:', error);
-    res.status(500).json({ error: 'Failed to remove member' });
-  }
-});
-
-// Remove team member
-app.delete('/api/teams/:teamId/members/:memberId', authenticateToken, async (req, res) => {
-  try {
-    const { teamId, memberId } = req.params;
-    const userId = req.userId;
-    
-    // Check if user is team owner
-    const teamResult = await pool.query('SELECT owner_id FROM teams WHERE id = $1', [teamId]);
-    if (teamResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    
-    if (teamResult.rows[0].owner_id !== userId) {
-      return res.status(403).json({ error: 'Only team owner can remove members' });
-    }
-    
-    // Remove member
-    const result = await pool.query(
-      'DELETE FROM team_members WHERE id = $1 AND team_id = $2 RETURNING *',
-      [memberId, teamId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Member not found' });
-    }
-    
-    res.json({ success: true, message: 'Member removed from team' });
-  } catch (error) {
-    console.error('Error removing member:', error);
-    res.status(500).json({ error: 'Failed to remove member' });
-  }
-});
-
-// Get team availability
-app.get('/api/teams/:id/availability', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `SELECT slot_start, slot_end, is_available
-       FROM time_slots WHERE team_id = $1 ORDER BY slot_start`,
-      [id]
-    );
-    res.json({ slots: result.rows });
-  } catch (error) {
-    console.error('Error fetching availability:', error);
-    res.status(500).json({ error: 'Failed to fetch availability' });
-  }
-});
-
-// Save team availability
-app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { availability } = req.body;
-    const userId = req.userId;
-    await pool.query(
-      'DELETE FROM time_slots WHERE team_id = $1 AND user_id = $2',
-      [id, userId]
-    );
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error saving availability:', error);
-    res.status(500).json({ error: 'Failed to save availability' });
-  }
-});
-
-// Get public team info (no auth required)
-
-/* ============================================================================
-   BOOKINGS API ENDPOINTS
-   ========================================================================== */
-
-// Create booking (public - no auth required)
-// Public booking submission (supports both routes)
-async function handleBookingSubmission(req, res) {
-  try {
-    let { team_id, date, time, guest_name, guest_email, guest_notes } = req.body;
-    
-    console.log('Creating booking with team_id:', team_id);
-    
-    // If team_id is not numeric, try to look it up as public_url
-    const isNumeric = /^\d+$/.test(String(team_id));
-    let teamResult;
-    
-    if (isNumeric) {
-      // It's a numeric ID
-      teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [parseInt(team_id)]);
-    } else {
-      // It's a public_url string - look it up
-      teamResult = await pool.query('SELECT * FROM teams WHERE public_url = $1', [team_id]);
-    }
-    
-    if (teamResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    
-    const team = teamResult.rows[0];
-    const numericTeamId = team.id; // Use the numeric ID from the database
-    
-    console.log('Found team:', { id: team.id, name: team.name });
-
-    // ────────────────────────── Option B: compute timestamps ──────────────────────────
-    const ts = parseDateAndTimeToTimestamp(date, time);
-    if (!ts || !ts.start || !ts.end) {
-      return res.status(400).json({ error: 'Invalid date/time format' });
-    }
-    
-    // Create booking with the numeric team ID and slot timestamps
-    const result = await pool.query(
-      `INSERT INTO bookings 
-         (team_id, slot_id, guest_name, guest_email, guest_notes, status, booking_date, booking_time, slot_start, slot_end)
-       VALUES 
-         ($1,     NULL,     $2,         $3,          $4,          'confirmed', $5,          $6,          $7,         $8)
-       RETURNING *`,
-      [numericTeamId, guest_name, guest_email, guest_notes || '', date, time, ts.start, ts.end]
-    );
-    
-    const booking = result.rows[0];
-    
-    console.log('Booking created:', booking.id);
-    
-    // Send emails if service is available
-    if (emailService) {
-      // Send confirmation to guest
-      emailService.sendBookingConfirmation(booking, team)
-        .catch(err => console.error('Email error:', err));
-      
-      // Send notification to team owner
-      const ownerResult = await pool.query('SELECT email FROM users WHERE id = $1', [team.owner_id]);
-      if (ownerResult.rows.length > 0) {
-        emailService.sendBookingNotificationToOwner(booking, team, ownerResult.rows[0].email)
-          .catch(err => console.error('Email error:', err));
-      }
-    }
-    
-    res.status(201).json({ booking: result.rows[0], emailSent: !!emailService });
-  } catch (error) {
-    console.error('Error creating booking:', error);
-    res.status(500).json({ error: error.message });
-  }
-}
-
-// Support both old and new booking endpoints
-app.post('/api/bookings', handleBookingSubmission);
-app.post('/api/teams/bookings/public', handleBookingSubmission);
-
-/* ----------------------- Availability Management ----------------------- */
-
-// Save user/team availability
-app.post('/api/availability', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { slots, team_id } = req.body;
-
-    // Delete existing slots for this user/team
-    if (team_id) {
-      await pool.query('DELETE FROM time_slots WHERE team_id = $1', [team_id]);
-    } else {
-      await pool.query('DELETE FROM time_slots WHERE user_id = $1', [userId]);
-    }
-
-    // Insert new slots
-    if (slots && slots.length > 0) {
-      const insertPromises = slots.map(slot => 
-        pool.query(
-          `INSERT INTO time_slots (team_id, user_id, day_of_week, start_time, end_time, is_available)
-           VALUES ($1, $2, $3, $4, $5, true)`,
-          [team_id || null, userId, slot.day_of_week, slot.start_time, slot.end_time]
-        )
-      );
-      await Promise.all(insertPromises);
-    }
-
-    res.json({ success: true, message: 'Availability saved' });
-  } catch (error) {
-    console.error('Error saving availability:', error);
-    res.status(500).json({ error: 'Failed to save availability' });
-  }
-});
-
-// Get user availability
-app.get('/api/availability', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const result = await pool.query(
-      'SELECT * FROM time_slots WHERE user_id = $1 ORDER BY day_of_week, start_time',
-      [userId]
-    );
-    res.json({ slots: result.rows });
-  } catch (error) {
-    console.error('Error fetching availability:', error);
-    res.status(500).json({ error: 'Failed to fetch availability' });
-  }
-});
-
-/* ------------------------- Get Team Bookings -------------------------- */
-
-// Get all bookings for user
-app.get('/api/bookings', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const result = await pool.query(
-      `SELECT b.*, t.name as team_name
-       FROM bookings b
-       JOIN teams t ON b.team_id = t.id
-       WHERE t.owner_id = $1
-       ORDER BY b.created_at DESC`,
-      [userId]
-    );
-    res.json({ bookings: result.rows });
-  } catch (error) {
-    console.error('Error fetching bookings:', error);
-    res.status(500).json({ error: 'Failed to fetch bookings' });
-  }
-});
-
-/* -------------------------- Calendar: Connections ------------------------- */
-app.get('/api/calendar/connections', async (req, res) => {
-  let userId = null;
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) { try { userId = jwt.verify(token, JWT_SECRET).userId; } catch {} }
-  if (!userId) return res.json({ connections: [] });
-
-  const out = await pool.query(
-    `SELECT id, provider, email, is_active, last_synced
-     FROM calendar_connections
-     WHERE user_id=$1
-     ORDER BY id DESC`,
-    [userId]
-  );
-  res.json({ connections: out.rows });
-});
-
-/* -------------------------- Google OAuth: Auth URL ------------------------ */
-app.get('/api/calendar/google/auth', (req, res) => {
-  if (assertGoogleConfigured(res)) return;
-
-  let userId = 'guest';
-  const tok = req.headers.authorization?.replace('Bearer ', '');
-  if (tok) { try { userId = jwt.verify(tok, JWT_SECRET).userId; } catch {} }
-
-  const authUrl =
-    `https://accounts.google.com/o/oauth2/v2/auth` +
-    `?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent('https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events')}` +
-    `&access_type=offline&prompt=consent` +
-    `&state=${encodeURIComponent(String(userId))}`;
-
-  res.json({ authUrl, configured: true });
-});
-
-/* ----------------------- Microsoft OAuth: Auth URL ------------------------ */
-app.get('/api/calendar/microsoft/auth', (req, res) => {
-  if (assertMicrosoftConfigured(res)) return;
-
-  let userId = 'guest';
-  const tok = req.headers.authorization?.replace('Bearer ', '');
-  if (tok) { try { userId = jwt.verify(tok, JWT_SECRET).userId; } catch {} }
-
-  const params = new URLSearchParams({
-    client_id: MICROSOFT_CLIENT_ID,
-    response_type: 'code',
-    redirect_uri: MICROSOFT_CALLBACK_URL,
-    response_mode: 'query',
-    scope: 'offline_access Calendars.ReadWrite',
-    state: String(userId),
-  });
-  const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
-
-  res.json({ authUrl, configured: true });
-});
-
-/* ----------------------------- OAuth Callbacks ---------------------------- */
-// (Token exchange TODO — these endpoints currently just bounce back to dashboard)
-
-app.get('/api/calendar/google/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.redirect('/dashboard?error=google_auth_failed');
-  console.log('Google OAuth callback received, code:', String(code).slice(0, 20) + '...');
-  return res.redirect('/dashboard?success=google_connected');
-});
-
-app.get('/api/calendar/microsoft/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.redirect('/dashboard?error=microsoft_auth_failed');
-  console.log('Microsoft OAuth callback received, code:', String(code).slice(0, 20) + '...');
-  return res.redirect('/dashboard?success=microsoft_connected');
-});
-
-/* --------------------------- Disconnect Calendar -------------------------- */
-app.delete('/api/calendar/connections/:id', async (req, res) => {
-  let userId = null;
-  const tok = req.headers.authorization?.replace('Bearer ', '');
-  if (tok) { try { userId = jwt.verify(tok, JWT_SECRET).userId; } catch {} }
-  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
-
-  await pool.query('DELETE FROM calendar_connections WHERE id=$1 AND user_id=$2', [req.params.id, userId]);
-  res.json({ success: true, message: 'Calendar disconnected' });
-});
-
-/* --------------------------- Config Status (UI) --------------------------- */
-app.get('/api/config/status', (_req, res) => {
-  const microsoftConfigured = !!(MICROSOFT_CLIENT_ID && MICROSOFT_CLIENT_SECRET && MICROSOFT_CALLBACK_URL);
-  const googleConfigured    = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
-  res.json({
-    microsoft: { configured: microsoftConfigured, clientId: microsoftConfigured ? '✓ Set' : '✗ Not set' },
-    google:    { configured: googleConfigured,    clientId: googleConfigured ? '✓ Set' : '✗ Not set' },
-    database:  { connected: dbReady }
-  });
-});
-
-/* ------------------------------- Static Pages ----------------------------- */
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/signup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
-app.get('/register', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
-app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
-app.get('/booking', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
-app.get('/teams', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-management.html')));
-app.get('/availability', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'availability.html')));
-app.get('/book/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'book.html')));
-app.get('/bookings', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'booking.html')));
-app.get('/calendar-setup', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'calendar-setup-updated.html')));
-app.get('/teams/:id', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'team-detail.html')));
-app.get('/forgot-password', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
-app.get('/reset-password', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'reset-password.html')));
-
-/* ----------------------------- Debug Endpoints ---------------------------- */
-app.get('/api/debug/email', (req, res) => {
-  res.json({
-    emailServiceLoaded: !!emailService,
-    emailServiceType: emailService ? typeof emailService : 'null',
-    emailServiceKeys: emailService ? Object.keys(emailService) : [],
-    resendApiKey: process.env.RESEND_API_KEY ? 'Set (length: ' + process.env.RESEND_API_KEY.length + ')' : 'Not set',
-    fromEmail: process.env.FROM_EMAIL || 'default: onboarding@resend.dev',
-    appUrl: process.env.APP_URL || 'default'
-  });
-});
-
-app.get('/api/debug/status', (req, res) => {
-  res.json({
-    server: 'running',
-    database: dbReady ? 'connected' : 'disconnected',
-    emailService: !!emailService,
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/api/debug/oauth', (req, res) => {
-  res.json({
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'MISSING',
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'MISSING',
-    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'MISSING',
-    GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || 'MISSING',
-    redirectUriUsed: process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_CALLBACK_URL || 'NONE',
-    authUrlTest: (() => {
-      try {
-        return googleAuth.getAuthUrl();
-      } catch (e) {
-        return 'ERROR: ' + e.message;
-      }
-    })()
-  });
-});
-
-// Manual migration endpoint for time_slots
-app.get('/api/migrate/fix-timeslots', async (req, res) => {
-  try {
-    const results = [];
-    
-    // Check current schema
-    const checkQuery = await pool.query(`
-      SELECT column_name, data_type 
-      FROM information_schema.columns 
-      WHERE table_name = 'time_slots'
-      ORDER BY ordinal_position
-    `);
-    results.push({ current_columns: checkQuery.rows });
-    
-    // Add missing columns
-    try {
-      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS day_of_week INTEGER`);
-      results.push({ added: 'day_of_week' });
-    } catch (e) {
-      results.push({ day_of_week: 'already exists or error: ' + e.message });
-    }
-    
-    try {
-      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS start_time TIME`);
-      results.push({ added: 'start_time' });
-    } catch (e) {
-      results.push({ start_time: 'already exists or error: ' + e.message });
-    }
-    
-    try {
-      await pool.query(`ALTER TABLE time_slots ADD COLUMN IF NOT EXISTS end_time TIME`);
-      results.push({ added: 'end_time' });
-    } catch (e) {
-      results.push({ end_time: 'already exists or error: ' + e.message });
-    }
-    
-    // Check schema after migration
-    const afterQuery = await pool.query(`
-      SELECT column_name, data_type 
-      FROM information_schema.columns 
-      WHERE table_name = 'time_slots'
-      ORDER BY ordinal_position
-    `);
-    results.push({ updated_columns: afterQuery.rows });
-    
-    res.json({ success: true, results });
-  } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ error: error.message, details: error });
-  }
-});
-
-/* --------------------------- Database Migrations -------------------------- */
-app.get('/api/migrate/fix-bookings', async (req, res) => {
-  try {
-    const migrations = [];
-    
-    // Check if guest_notes column exists
-    const checkColumn = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name='bookings' AND column_name='guest_notes'
-    `);
-    
-    if (checkColumn.rows.length === 0) {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN guest_notes TEXT`);
-      migrations.push('Added guest_notes column');
-    } else {
-      migrations.push('guest_notes column already exists');
-    }
-    
-    // Check if booking_date column exists
-    const checkDate = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name='bookings' AND column_name='booking_date'
-    `);
-    
-    if (checkDate.rows.length === 0) {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN booking_date DATE`);
-      migrations.push('Added booking_date column');
-    } else {
-      migrations.push('booking_date column already exists');
-    }
-    
-    // Check if booking_time column exists
-    const checkTime = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name='bookings' AND column_name='booking_time'
-    `);
-    
-    if (checkTime.rows.length === 0) {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN booking_time VARCHAR(50)`);
-      migrations.push('Added booking_time column');
-    } else {
-      migrations.push('booking_time column already exists');
-    }
-    
-    res.json({ 
-      success: true, 
-      migrations: migrations,
-      message: 'Database migration completed!'
-    });
-  } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      hint: 'Check Railway logs for details'
-    });
-  }
-});
-
-app.get('/api/migrate/fix-slot-constraints', async (req, res) => {
-  try {
-    const migrations = [];
-    
-    // Make slot_start nullable
-    await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_start DROP NOT NULL`);
-    migrations.push('Made slot_start column nullable');
-    
-    // Make slot_end nullable
-    await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_end DROP NOT NULL`);
-    migrations.push('Made slot_end column nullable');
-    
-    // Make slot_id nullable (if it has NOT NULL constraint)
-    try {
-      await pool.query(`ALTER TABLE bookings ALTER COLUMN slot_id DROP NOT NULL`);
-      migrations.push('Made slot_id column nullable');
-    } catch (e) {
-      migrations.push('slot_id already nullable or does not exist');
-    }
-    
-    res.json({ 
-      success: true, 
-      migrations: migrations,
-      message: 'Slot constraints fixed! Bookings should work now.'
-    });
-  } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      hint: 'Check Railway logs for details'
-    });
-  }
-});
-
-/* ======================= GOOGLE OAUTH MIGRATION ========================== */
-app.get('/api/migrate/add-google-oauth', async (req, res) => {
-  try {
-    const migrations = [];
-    
-    // Make password nullable
-    try {
-      await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`);
-      migrations.push('✅ Made password nullable');
-    } catch (e) {
-      migrations.push('⚠️ Password: ' + e.message);
-    }
-    
-    // Add google_id
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
-      migrations.push('✅ Added google_id');
-    } catch (e) {
-      migrations.push('⚠️ google_id: ' + e.message);
-    }
-    
-    // Add google_access_token
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT`);
-      migrations.push('✅ Added google_access_token');
-    } catch (e) {
-      migrations.push('⚠️ google_access_token: ' + e.message);
-    }
-    
-    // Add google_refresh_token
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT`);
-      migrations.push('✅ Added google_refresh_token');
-    } catch (e) {
-      migrations.push('⚠️ google_refresh_token: ' + e.message);
-    }
-    
-    // Add default_calendar_id
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_calendar_id VARCHAR(255)`);
-      migrations.push('✅ Added default_calendar_id');
-    } catch (e) {
-      migrations.push('⚠️ default_calendar_id: ' + e.message);
-    }
-    
-    // Add profile_picture
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
-      migrations.push('✅ Added profile_picture');
-    } catch (e) {
-      migrations.push('⚠️ profile_picture: ' + e.message);
-    }
-    
-    // Add timezone
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC'`);
-      migrations.push('✅ Added timezone');
-    } catch (e) {
-      migrations.push('⚠️ timezone: ' + e.message);
-    }
-    
-    // Add working_hours
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours JSONB DEFAULT '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'::jsonb`);
-      migrations.push('✅ Added working_hours');
-    } catch (e) {
-      migrations.push('⚠️ working_hours: ' + e.message);
-    }
-    
-    // Add booking_preferences
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_preferences JSONB DEFAULT '{"buffer_before":10,"buffer_after":10,"lead_time_hours":24,"max_horizon_days":30,"daily_cap":8}'::jsonb`);
-      migrations.push('✅ Added booking_preferences');
-    } catch (e) {
-      migrations.push('⚠️ booking_preferences: ' + e.message);
-    }
-    
-    // Create index
-    try {
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
-      migrations.push('✅ Created index on google_id');
-    } catch (e) {
-      migrations.push('⚠️ Index: ' + e.message);
-    }
-    
-    // Add calendar_event_id to bookings
-    try {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS calendar_event_id VARCHAR(255)`);
-      migrations.push('✅ Added calendar_event_id to bookings');
-    } catch (e) {
-      migrations.push('⚠️ calendar_event_id: ' + e.message);
-    }
-    
-    // Add meet_link to bookings
-    try {
-      await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meet_link TEXT`);
-      migrations.push('✅ Added meet_link to bookings');
-    } catch (e) {
-      migrations.push('⚠️ meet_link: ' + e.message);
-    }
-    
-    res.json({ 
-      success: true, 
-      migrations: migrations,
-      message: '🎉 Google OAuth migration completed!'
-    });
-  } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      hint: 'Check Railway logs for details'
-    });
-  }
-});
-
-/* ======================== CALENDAR API ENDPOINTS ======================== */
-
-// Get user's Google Calendars
-app.get('/api/calendars', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    if (!googleAuth) {
-      return res.status(503).json({ error: 'Google Calendar integration is not configured' });
-    }
-
-    // Get user's tokens
     const userResult = await pool.query(
       'SELECT google_access_token, google_refresh_token FROM users WHERE id = $1',
-      [userId]
+      [req.user.userId]
     );
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    if (userResult.rows.length === 0 || !userResult.rows[0].google_access_token) {
+      return res.status(401).json({ error: 'Google account not connected' });
     }
 
     const user = userResult.rows[0];
-
-    if (!user.google_access_token || !user.google_refresh_token) {
-      return res.status(401).json({ error: 'Google Calendar not connected. Please connect your calendar first.' });
-    }
-
-    // Get calendar list from Google
-    try {
-      const calendars = await googleAuth.getCalendarList(
-        user.google_access_token,
-        user.google_refresh_token
-      );
-
-      res.json(calendars);
-    } catch (calError) {
-      console.error('Error fetching calendars from Google:', calError);
-      
-      // If token expired, try to refresh
-      if (calError.message.includes('invalid_grant') || calError.message.includes('Token expired')) {
-        return res.status(401).json({ 
-          error: 'Calendar access expired. Please reconnect your Google Calendar.',
-          needsReauth: true 
-        });
-      }
-      
-      throw calError;
-    }
-  } catch (error) {
-    console.error('Error fetching calendars:', error);
-    res.status(500).json({ error: 'Failed to fetch calendars' });
-  }
-});
-
-// Save selected calendar
-app.put('/api/user/calendar', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { calendar_id } = req.body;
-
-    if (!calendar_id) {
-      return res.status(400).json({ error: 'Calendar ID is required' });
-    }
-
-    // Update user's default calendar
-    const result = await pool.query(
-      'UPDATE users SET default_calendar_id = $1 WHERE id = $2 RETURNING *',
-      [calendar_id, userId]
+    const calendars = await googleAuth.getCalendarList(
+      user.google_access_token,
+      user.google_refresh_token
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'Calendar saved successfully',
-      user: {
-        id: result.rows[0].id,
-        default_calendar_id: result.rows[0].default_calendar_id
-      }
-    });
-  } catch (error) {
-    console.error('Error saving calendar:', error);
-    res.status(500).json({ error: 'Failed to save calendar' });
-  }
-});
-
-// Get Google OAuth authorization URL
-app.get('/api/auth/google', (req, res) => {
-  try {
-    if (!googleAuth) {
-      return res.status(503).json({ error: 'Google Calendar integration is not configured' });
-    }
-
-    const authUrl = googleAuth.getAuthUrl();
-    res.json({ authUrl });
-  } catch (error) {
-    console.error('Error generating auth URL:', error);
-    res.status(500).json({ error: 'Failed to generate authorization URL' });
-  }
-});
-
-// Handle Google OAuth callback
-app.get('/api/calendar/google/callback', async (req, res) => {
-  try {
-    const { code, error: oauthError } = req.query;
-
-    if (oauthError) {
-      console.error('OAuth error:', oauthError);
-      return res.redirect('/calendar-setup?error=' + encodeURIComponent(oauthError));
-    }
-
-    if (!code) {
-      return res.redirect('/calendar-setup?error=no_authorization_code');
-    }
-
-    if (!googleAuth) {
-      return res.redirect('/calendar-setup?error=service_unavailable');
-    }
-
-    console.log('📝 Received OAuth code, exchanging for tokens...');
-
-    // Exchange code for tokens
-    const tokens = await googleAuth.getTokensFromCode(code);
-    console.log('✅ Got tokens from Google');
-
-    // Get user info
-    const userInfo = await googleAuth.getUserInfo(tokens.access_token);
-    console.log('✅ Got user info:', userInfo.email);
-
-    // Update user in database with Google tokens
-    const result = await pool.query(
-      `UPDATE users 
-       SET google_id = $1,
-           google_access_token = $2,
-           google_refresh_token = $3,
-           profile_picture = $4
-       WHERE email = $5
-       RETURNING id, email, name`,
-      [
-        userInfo.google_id,
-        tokens.access_token,
-        tokens.refresh_token,
-        userInfo.picture,
-        userInfo.email
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      console.error('❌ User not found with email:', userInfo.email);
-      return res.redirect('/calendar-setup?error=user_not_found');
-    }
-
-    console.log('✅ Updated user in database:', result.rows[0].email);
-
-    // Redirect to calendar selection page
-    res.redirect('/calendar-setup?connected=true');
-  } catch (error) {
-    console.error('❌ Error in OAuth callback:', error);
-    res.redirect('/calendar-setup?error=' + encodeURIComponent(error.message));
-  }
-});
-
-// Disconnect Google Calendar
-app.post('/api/calendar/disconnect', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    await pool.query(
-      `UPDATE users 
-       SET google_access_token = NULL,
-           google_refresh_token = NULL,
-           google_id = NULL,
-           default_calendar_id = NULL
-       WHERE id = $1`,
-      [userId]
-    );
-
-    res.json({ success: true, message: 'Calendar disconnected successfully' });
-  } catch (error) {
-    console.error('Error disconnecting calendar:', error);
-    res.status(500).json({ error: 'Failed to disconnect calendar' });
-  }
-});
-
-/* ======================================================================== */
-
-/* ==================== MICROSOFT CALENDAR ENDPOINTS ==================== */
-
-const axios = require('axios');
-
-// Microsoft OAuth configuration
-const MICROSOFT_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
-const MICROSOFT_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-const MICROSOFT_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
-
-const MICROSOFT_SCOPES = [
-  'openid',
-  'profile',
-  'email',
-  'offline_access',
-  'Calendars.ReadWrite',
-  'Calendars.Read',
-  'User.Read'
-].join(' ');
-
-// Get Microsoft OAuth authorization URL
-app.get('/api/auth/microsoft', (req, res) => {
-  try {
-    if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CALLBACK_URL) {
-      return res.status(503).json({ error: 'Microsoft Calendar integration is not configured' });
-    }
-
-    const authUrl = `${MICROSOFT_AUTH_URL}?` +
-      `client_id=${encodeURIComponent(MICROSOFT_CLIENT_ID)}` +
-      `&response_type=code` +
-      `&redirect_uri=${encodeURIComponent(MICROSOFT_CALLBACK_URL)}` +
-      `&response_mode=query` +
-      `&scope=${encodeURIComponent(MICROSOFT_SCOPES)}`;
-
-    res.json({ authUrl });
-  } catch (error) {
-    console.error('Error generating Microsoft auth URL:', error);
-    res.status(500).json({ error: 'Failed to generate authorization URL' });
-  }
-});
-
-// Handle Microsoft OAuth callback
-app.get('/api/calendar/microsoft/callback', async (req, res) => {
-  try {
-    const { code, error: oauthError } = req.query;
-
-    if (oauthError) {
-      console.error('Microsoft OAuth error:', oauthError);
-      return res.redirect('/login?error=' + encodeURIComponent(oauthError));
-    }
-
-    if (!code) {
-      return res.redirect('/login?error=no_authorization_code');
-    }
-
-    console.log('📝 Received Microsoft OAuth code, exchanging for tokens...');
-
-    // Exchange code for tokens
-    const tokenResponse = await axios.post(MICROSOFT_TOKEN_URL, new URLSearchParams({
-      client_id: MICROSOFT_CLIENT_ID,
-      client_secret: MICROSOFT_CLIENT_SECRET,
-      code: code,
-      redirect_uri: MICROSOFT_CALLBACK_URL,
-      grant_type: 'authorization_code'
-    }), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-
-    const { access_token, refresh_token } = tokenResponse.data;
-    console.log('✅ Got tokens from Microsoft');
-
-    // Get user info
-    const userResponse = await axios.get(`${MICROSOFT_GRAPH_URL}/me`, {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
-
-    const userInfo = userResponse.data;
-    const email = userInfo.mail || userInfo.userPrincipalName;
-    const name = userInfo.displayName || email.split('@')[0];
-    
-    console.log('✅ Got user info:', email);
-
-    // Try to find existing user
-    let userResult = await pool.query('SELECT id, email, name FROM users WHERE email = $1', [email]);
-    
-    let userId;
-    if (userResult.rows.length === 0) {
-      // User doesn't exist - create new user
-      console.log('📝 Creating new user from Microsoft OAuth...');
-      const newUser = await pool.query(
-        `INSERT INTO users (name, email, microsoft_id, microsoft_access_token, microsoft_refresh_token)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, email, name`,
-        [name, email, userInfo.id, access_token, refresh_token]
-      );
-      userId = newUser.rows[0].id;
-      console.log('✅ Created new user:', email);
-    } else {
-      // User exists - update with Microsoft credentials
-      console.log('📝 Updating existing user with Microsoft credentials...');
+    // Save calendars to database
+    for (const cal of calendars) {
       await pool.query(
-        `UPDATE users 
-         SET microsoft_id = $1,
-             microsoft_access_token = $2,
-             microsoft_refresh_token = $3
-         WHERE email = $4`,
-        [userInfo.id, access_token, refresh_token, email]
+        `INSERT INTO calendar_integrations (user_id, provider, calendar_id, calendar_name, is_primary)
+         VALUES ($1, 'google', $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [req.user.userId, cal.id, cal.name, cal.primary]
       );
-      userId = userResult.rows[0].id;
-      console.log('✅ Updated user:', email);
     }
 
-    // Create JWT token and redirect to dashboard
-    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
-    
-    // Redirect to dashboard with token (frontend will store it)
-    res.redirect(`/dashboard?token=${token}&microsoft=connected`);
+    res.json({ success: true, calendars });
   } catch (error) {
-    console.error('❌ Error in Microsoft OAuth callback:', error.response?.data || error.message);
-    res.redirect('/login?error=' + encodeURIComponent(error.message));
+    console.error('❌ Error syncing Google calendars:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Get user's Microsoft Calendars
-app.get('/api/calendars/microsoft', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
+// ============================================================================
+// BOOKING ENDPOINTS
+// ============================================================================
 
-    // Get user's tokens
-    const userResult = await pool.query(
-      'SELECT microsoft_access_token, microsoft_refresh_token FROM users WHERE id = $1',
-      [userId]
+// Get user's bookings
+app.get('/api/bookings', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM bookings WHERE user_id = $1 ORDER BY start_time DESC',
+      [req.user.userId]
     );
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
-
-    if (!user.microsoft_access_token || !user.microsoft_refresh_token) {
-      return res.status(401).json({ 
-        error: 'Microsoft Calendar not connected. Please connect your calendar first.',
-        needsAuth: true 
-      });
-    }
-
-    // Get calendar list from Microsoft
-    try {
-      const response = await axios.get(`${MICROSOFT_GRAPH_URL}/me/calendars`, {
-        headers: { Authorization: `Bearer ${user.microsoft_access_token}` }
-      });
-
-      const calendars = response.data.value.map(cal => ({
-        id: cal.id,
-        name: cal.name,
-        primary: cal.isDefaultCalendar || false,
-        canEdit: cal.canEdit !== false,
-        owner: cal.owner?.name || cal.owner?.address,
-        color: cal.color
-      }));
-
-      res.json(calendars);
-    } catch (calError) {
-      console.error('Error fetching Microsoft calendars:', calError.response?.data || calError);
-      
-      // If token expired, try to refresh
-      if (calError.response?.status === 401) {
-        return res.status(401).json({ 
-          error: 'Calendar access expired. Please reconnect your Microsoft Calendar.',
-          needsReauth: true 
-        });
-      }
-      
-      throw calError;
-    }
+    res.json({ bookings: result.rows });
   } catch (error) {
-    console.error('Error fetching Microsoft calendars:', error);
-    res.status(500).json({ error: 'Failed to fetch calendars' });
+    console.error('❌ Error fetching bookings:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Disconnect Microsoft Calendar
-app.post('/api/calendar/microsoft/disconnect', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
+// Create booking
+app.post('/api/bookings', authenticateToken, async (req, res) => {
+  const { title, description, start_time, end_time, attendee_email, attendee_name } = req.body;
 
-    await pool.query(
-      `UPDATE users 
-       SET microsoft_access_token = NULL,
-           microsoft_refresh_token = NULL,
-           microsoft_id = NULL
-       WHERE id = $1`,
-      [userId]
+  if (!title || !start_time || !end_time) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO bookings (user_id, title, description, start_time, end_time, attendee_email, attendee_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [req.user.userId, title, description, start_time, end_time, attendee_email, attendee_name]
     );
 
-    res.json({ success: true, message: 'Microsoft Calendar disconnected successfully' });
+    console.log('✅ Booking created:', result.rows[0].id);
+    res.json({ success: true, booking: result.rows[0] });
   } catch (error) {
-    console.error('Error disconnecting Microsoft calendar:', error);
-    res.status(500).json({ error: 'Failed to disconnect calendar' });
+    console.error('❌ Error creating booking:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-/* ====================================================================== */
+// ============================================================================
+// PROTECTED ROUTES MIDDLEWARE
+// ============================================================================
 
-/* --------------------------------- 404 ------------------------------------ */
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+// Protect dashboard
+app.get('/dashboard.html', (req, res, next) => {
+  const token = req.cookies.token;
 
-/* ------------------------------- Start Server ----------------------------- */
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server listening on http://0.0.0.0:${PORT}`);
-  console.log('✅ ScheduleSync API Running\n');
+  if (!token) {
+    console.log('⛔ Unauthorized access to dashboard');
+    return res.redirect('/login?error=not_authenticated');
+  }
+
+  try {
+    jwt.verify(token, JWT_SECRET);
+    console.log('✅ Dashboard access granted');
+    next();
+  } catch (error) {
+    console.log('⛔ Invalid token');
+    return res.redirect('/login?error=session_expired');
+  }
 });
 
-/* ---------------------------- Graceful Shutdown --------------------------- */
-function shutdown(sig) {
-  console.log(`${sig} received. Shutting down...`);
-  server.close(() => process.exit(0));
-}
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+// ============================================================================
+// HEALTH CHECK
+// ============================================================================
+
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      googleAuth: !!googleAuth,
+      microsoftAuth: !!microsoftAuth,
+      emailService: !!emailService,
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: error.message,
+    });
+  }
+});
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// ============================================================================
+// START SERVER
+// ============================================================================
+
+app.listen(PORT, () => {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`🚀 ScheduleSync API Server`);
+  console.log(`📍 Port: ${PORT}`);
+  console.log(`🌍 Environment: ${NODE_ENV}`);
+  console.log(`✅ Database: Connected`);
+  console.log(`✅ Cookie Parser: Enabled`);
+  console.log(`${googleAuth ? '✅' : '❌'} Google OAuth: ${googleAuth ? 'Enabled' : 'Disabled'}`);
+  console.log(`${microsoftAuth ? '✅' : '❌'} Microsoft OAuth: ${microsoftAuth ? 'Enabled' : 'Disabled'}`);
+  console.log(`${emailService ? '✅' : '❌'} Email Service: ${emailService ? 'Enabled' : 'Disabled'}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...');
+  pool.end();
+  process.exit(0);
+});
