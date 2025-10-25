@@ -323,36 +323,13 @@
             showAlert(decodeURIComponent(urlParams.get('error')), 'error');
         }
 
-        async function signInWithGoogle() {
-            try {
-                const response = await fetch('/api/auth/google');
-                const data = await response.json();
-                
-                if (data.authUrl) {
-                    window.location.href = data.authUrl;
-                } else {
-                    showAlert('Failed to initiate Google sign-in', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Failed to connect to Google', 'error');
-            }
+        // FIXED: Direct redirect to OAuth endpoints
+        function signInWithGoogle() {
+            window.location.href = '/auth/google';
         }
 
-        async function signInWithMicrosoft() {
-            try {
-                const response = await fetch('/api/auth/microsoft');
-                const data = await response.json();
-                
-                if (data.authUrl) {
-                    window.location.href = data.authUrl;
-                } else {
-                    showAlert('Failed to initiate Microsoft sign-in', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Failed to connect to Microsoft', 'error');
-            }
+        function signInWithMicrosoft() {
+            window.location.href = '/auth/microsoft';
         }
 
         async function handleLogin(e) {
@@ -371,20 +348,13 @@
                 const data = await response.json();
 
                 if (response.ok && data.token) {
+                    // Store token and user in localStorage
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
+                    // Redirect to dashboard
                     window.location.href = '/dashboard';
                 } else {
-                    // Show specific error message based on error type
-                    if (data.type === 'email_not_found') {
-                        showAlert('❌ No account found with this email. Please sign up first.', 'error');
-                    } else if (data.type === 'wrong_password') {
-                        showAlert('❌ Incorrect password. Please try again or click "Forgot password?"', 'error');
-                    } else if (data.type === 'no_password') {
-                        showAlert('ℹ️ Please use Google or Microsoft sign-in, or reset your password.', 'info');
-                    } else {
-                        showAlert('❌ ' + (data.error || 'Login failed'), 'error');
-                    }
+                    showAlert('❌ ' + (data.error || 'Login failed'), 'error');
                 }
             } catch (error) {
                 console.error('Login error:', error);

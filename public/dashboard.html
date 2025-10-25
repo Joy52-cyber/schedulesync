@@ -17,7 +17,6 @@
             min-height: 100vh;
         }
 
-        /* Navbar */
         .navbar {
             background: white;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -91,7 +90,6 @@
             background: #e2e8f0;
         }
 
-        /* Main Content */
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -113,7 +111,6 @@
             font-size: 16px;
         }
 
-        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -179,7 +176,6 @@
             font-size: 14px;
         }
 
-        /* Quick Actions */
         .quick-actions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -221,7 +217,6 @@
             box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
         }
 
-        /* Recent Activity */
         .section {
             background: white;
             padding: 24px;
@@ -270,7 +265,6 @@
             margin-bottom: 20px;
         }
 
-        /* Mobile Menu */
         .mobile-menu-btn {
             display: none;
             background: none;
@@ -328,7 +322,6 @@
     </style>
 </head>
 <body>
-    <!-- Navbar -->
     <nav class="navbar">
         <a href="/" class="nav-brand">📅 ScheduleSync</a>
         <div class="nav-links">
@@ -344,15 +337,12 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="container">
-        <!-- Page Header -->
         <div class="page-header">
             <h1>Welcome back, <span id="userName">User</span>! 👋</h1>
             <p>Here's what's happening with your schedule today</p>
         </div>
 
-        <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-header">
@@ -395,7 +385,6 @@
             </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="quick-actions">
             <a href="/teams" class="action-btn primary">
                 ➕ Create Team
@@ -411,7 +400,6 @@
             </a>
         </div>
 
-        <!-- Recent Activity -->
         <div class="section">
             <div class="section-header">
                 <h2 class="section-title">Recent Activity</h2>
@@ -427,12 +415,29 @@
     </div>
 
     <script>
-        // Check authentication
+        // FIXED: Check if token is in URL (from OAuth redirect)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        const urlUser = urlParams.get('user');
+
+        if (urlToken) {
+            // Store token from URL in localStorage
+            localStorage.setItem('token', urlToken);
+            if (urlUser) {
+                localStorage.setItem('user', urlUser);
+            }
+            // Clean up URL
+            window.history.replaceState({}, document.title, '/dashboard');
+            console.log('✅ Token stored from OAuth redirect');
+        }
+
+        // Now check authentication
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
 
         if (!token) {
             window.location.href = '/login';
+            throw new Error('Not authenticated'); // Stop execution
         }
 
         // Display user info
