@@ -3247,4 +3247,5 @@ function shutdown(sig) {
   server.close(() => process.exit(0));
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));/ /   F o r c e   r e d e p l o y  
+ 
