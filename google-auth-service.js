@@ -1,7 +1,7 @@
 ﻿// google-auth-service.js - Google OAuth and Calendar API integration
-
 const { google } = require('googleapis');
 const { OAuth2Client } = require('google-auth-library');
+const axios = require('axios');
 
 // Initialize OAuth2 client
 const getOAuth2Client = () => {
@@ -30,13 +30,14 @@ const SCOPES = [
 /**
  * Generate Google OAuth URL
  */
-function getAuthUrl() {
+function getAuthUrl(options = {}) {
   const oauth2Client = getOAuth2Client();
   
   const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
+    access_type: options.access_type || 'offline',
     scope: SCOPES,
-    prompt: 'select_account' // Show account picker, but not consent screen if already granted
+    prompt: options.prompt || 'select_account', // Show account picker, but not consent screen if already granted
+    state: options.state || undefined
   });
   
   return url;
@@ -55,6 +56,13 @@ async function getTokensFromCode(code) {
     console.error('Error getting tokens:', error);
     throw error;
   }
+}
+
+/**
+ * Alias for backward compatibility
+ */
+async function getTokens(code) {
+  return getTokensFromCode(code);
 }
 
 /**
@@ -125,10 +133,70 @@ async function refreshAccessToken(refreshToken) {
   }
 }
 
+/* ============================================================================
+   PHASE 2: CALENDAR INTEGRATION FUNCTIONS
+   ========================================================================== */
+
+/**
+ * Get busy times from Google Calendar (for availability checking)
+ */
+async function getBusyTimes(accessToken, startDate, endDate) {
+  try {
+    const response = await axios.post(
+      'https://www.googleapis.com/calendar/v3/freeBusy',
+      {
+        timeMin: startDate.toISOString(),
+        timeMax: endDate.toISOString(),
+        items: [{ id: 'primary' }]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const busyTimes = response.data.calendars.primary.busy || [];
+    return busyTimes;
+
+  } catch (error) {
+    console.error('Error fetching busy times:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+/**
+ * Create calendar event with Google Meet
+ */
+async function createCalendarEvent(accessToken, event) {
+  try {
+    const response = await axios.post(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1',
+      event,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data;
+
+  } catch (error) {
+    console.error('Error creating calendar event:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   getAuthUrl,
   getTokensFromCode,
+  getTokens,  // Alias for backward compatibility
   getUserInfo,
   getCalendarList,
-  refreshAccessToken
+  refreshAccessToken,
+  getBusyTimes,        // Phase 2
+  createCalendarEvent  // Phase 2
 };

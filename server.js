@@ -1870,7 +1870,7 @@ app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
       'SELECT id, email, display_name FROM users WHERE id = $1',
       [userId]
     );
-
+   
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1972,6 +1972,392 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
           memberNames.push(memberResult.rows[0].display_name || memberResult.rows[0].email);
         }
       }
+
+      /* ============================================================================
+   PHASE 2 - GUEST BOOKING ENDPOINTS
+   Add these endpoints to your server.js after Phase 1 endpoints
+   ========================================================================== */
+
+// Get booking request by token (for guest landing page)
+app.get('/api/booking-request/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Get booking request with team and creator info
+    const result = await pool.query(
+      `SELECT 
+        br.*,
+        t.name as team_name,
+        t.description as team_description,
+        u.name as creator_name,
+        u.email as creator_email
+       FROM booking_requests br
+       JOIN teams t ON br.team_id = t.id
+       JOIN users u ON br.created_by = u.id
+       WHERE br.unique_token = $1`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking request not found' });
+    }
+
+    const request = result.rows[0];
+
+    // Check if already booked
+    if (request.status === 'booked') {
+      return res.json({
+        ...request,
+        message: 'This booking request has already been completed'
+      });
+    }
+
+    // Get team member details
+    const memberIds = request.team_members;
+    const memberResults = await pool.query(
+      'SELECT id, name, email FROM users WHERE id = ANY($1)',
+      [memberIds]
+    );
+
+    res.json({
+      id: request.id,
+      team_name: request.team_name,
+      team_description: request.team_description,
+      creator_name: request.creator_name,
+      creator_email: request.creator_email,
+      recipient_name: request.recipient_name,
+      recipient_email: request.recipient_email,
+      custom_message: request.custom_message,
+      status: request.status,
+      guest_calendar_connected: request.guest_calendar_connected,
+      booked_slot_start: request.booked_slot_start,
+      booked_slot_end: request.booked_slot_end,
+      team_members: memberResults.rows,
+      created_at: request.created_at
+    });
+
+  } catch (error) {
+    console.error('Error fetching booking request:', error);
+    res.status(500).json({ error: 'Failed to fetch booking request' });
+  }
+});
+
+// Connect guest calendar (Google OAuth)
+app.get('/api/booking-request/:token/connect-google', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Verify token exists
+    const result = await pool.query(
+      'SELECT id FROM booking_requests WHERE unique_token = $1',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking request not found' });
+    }
+
+    // Generate OAuth URL
+    const authUrl = googleAuth.getAuthUrl({
+      state: JSON.stringify({ 
+        type: 'booking_request',
+        token: token 
+      }),
+      access_type: 'offline',
+      prompt: 'consent'
+    });
+
+    res.json({ authUrl });
+
+  } catch (error) {
+    console.error('Error generating Google auth URL:', error);
+    res.status(500).json({ error: 'Failed to generate auth URL' });
+  }
+});
+
+// Google OAuth callback for booking requests
+app.get('/auth/google/callback/booking-request', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    
+    if (!code || !state) {
+      return res.redirect('/error.html?error=missing_params');
+    }
+
+    const stateData = JSON.parse(state);
+    const { token } = stateData;
+
+    // Exchange code for tokens
+    const tokens = await googleAuth.getTokens(code);
+
+    // Get user info from Google
+    const userInfo = await googleAuth.getUserInfo(tokens.access_token);
+
+    // Update booking request with calendar connection
+    await pool.query(
+      `UPDATE booking_requests 
+       SET guest_calendar_connected = TRUE,
+           guest_google_access_token = $1,
+           guest_google_refresh_token = $2,
+           guest_google_email = $3,
+           updated_at = NOW()
+       WHERE unique_token = $4`,
+      [
+        tokens.access_token,
+        tokens.refresh_token,
+        userInfo.email,
+        token
+      ]
+    );
+
+    // Redirect back to booking request page
+    res.redirect(`/booking-request/${token}?calendar_connected=true`);
+
+  } catch (error) {
+    console.error('Error in Google OAuth callback:', error);
+    res.redirect('/error.html?error=auth_failed');
+  }
+});
+
+// Get available time slots (mutual availability)
+app.get('/api/booking-request/:token/available-slots', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { date } = req.query; // Optional: specific date to check
+
+    // Get booking request with calendar tokens
+    const result = await pool.query(
+      `SELECT 
+        br.*,
+        u.google_access_token as creator_google_token,
+        u.google_refresh_token as creator_google_refresh
+       FROM booking_requests br
+       JOIN users u ON br.created_by = u.id
+       WHERE br.unique_token = $1`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking request not found' });
+    }
+
+    const request = result.rows[0];
+
+    // Check if guest calendar is connected
+    if (!request.guest_calendar_connected) {
+      return res.status(400).json({ error: 'Guest calendar not connected' });
+    }
+
+    // Get all team members' calendar tokens
+    const memberTokens = await pool.query(
+      `SELECT id, google_access_token, google_refresh_token 
+       FROM users 
+       WHERE id = ANY($1)`,
+      [request.team_members]
+    );
+
+    // Fetch calendar events for all participants
+    const startDate = date ? new Date(date) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 14); // Next 2 weeks
+
+    // Get busy times for all participants
+    const allBusyTimes = [];
+
+    // Guest busy times
+    if (request.guest_google_access_token) {
+      const guestBusy = await googleAuth.getBusyTimes(
+        request.guest_google_access_token,
+        startDate,
+        endDate
+      );
+      allBusyTimes.push(...guestBusy);
+    }
+
+    // Team members busy times
+    for (const member of memberTokens.rows) {
+      if (member.google_access_token) {
+        const memberBusy = await googleAuth.getBusyTimes(
+          member.google_access_token,
+          startDate,
+          endDate
+        );
+        allBusyTimes.push(...memberBusy);
+      }
+    }
+
+    // Find free slots (30-minute slots, 9 AM - 5 PM, weekdays only)
+    const freeSlots = findFreeSlots(allBusyTimes, startDate, endDate);
+
+    res.json({
+      available_slots: freeSlots,
+      timezone: 'UTC', // TODO: Handle timezone
+      participants_count: request.team_members.length + 1
+    });
+
+  } catch (error) {
+    console.error('Error finding available slots:', error);
+    res.status(500).json({ error: 'Failed to find available slots' });
+  }
+});
+
+// Helper function: Find free time slots
+function findFreeSlots(busyTimes, startDate, endDate, duration = 30) {
+  const freeSlots = [];
+  const workStart = 9; // 9 AM
+  const workEnd = 17; // 5 PM
+
+  let currentDate = new Date(startDate);
+  currentDate.setHours(workStart, 0, 0, 0);
+
+  while (currentDate < endDate) {
+    // Skip weekends
+    if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(workStart, 0, 0, 0);
+      continue;
+    }
+
+    // Check each 30-minute slot during work hours
+    while (currentDate.getHours() < workEnd) {
+      const slotEnd = new Date(currentDate);
+      slotEnd.setMinutes(slotEnd.getMinutes() + duration);
+
+      // Check if slot is free for all participants
+      const isFree = !busyTimes.some(busy => {
+        const busyStart = new Date(busy.start);
+        const busyEnd = new Date(busy.end);
+        return (currentDate < busyEnd && slotEnd > busyStart);
+      });
+
+      if (isFree) {
+        freeSlots.push({
+          start: currentDate.toISOString(),
+          end: slotEnd.toISOString(),
+          date: currentDate.toISOString().split('T')[0],
+          time: currentDate.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+          })
+        });
+      }
+
+      currentDate.setMinutes(currentDate.getMinutes() + duration);
+    }
+
+    // Move to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setHours(workStart, 0, 0, 0);
+  }
+
+  return freeSlots;
+}
+
+// Book selected time slot
+app.post('/api/booking-request/:token/book', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { slot_start, slot_end } = req.body;
+
+    if (!slot_start || !slot_end) {
+      return res.status(400).json({ error: 'Missing time slot' });
+    }
+
+    // Get booking request
+    const result = await pool.query(
+      `SELECT 
+        br.*,
+        u.google_access_token as creator_google_token,
+        u.google_refresh_token as creator_google_refresh,
+        u.name as creator_name,
+        t.name as team_name
+       FROM booking_requests br
+       JOIN users u ON br.created_by = u.id
+       JOIN teams t ON br.team_id = t.id
+       WHERE br.unique_token = $1`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking request not found' });
+    }
+
+    const request = result.rows[0];
+
+    // Check if already booked
+    if (request.status === 'booked') {
+      return res.status(400).json({ error: 'Already booked' });
+    }
+
+    // Get all participants' emails
+    const participants = await pool.query(
+      `SELECT email, google_access_token FROM users WHERE id = ANY($1)`,
+      [request.team_members]
+    );
+
+    const attendees = [
+      request.recipient_email,
+      ...participants.rows.map(p => p.email)
+    ];
+
+    // Create calendar event for creator (they'll send invites to others)
+    const event = {
+      summary: `Meeting: ${request.team_name} & ${request.recipient_name}`,
+      description: request.custom_message || 'Meeting scheduled via ScheduleSync',
+      start: {
+        dateTime: slot_start,
+        timeZone: 'UTC'
+      },
+      end: {
+        dateTime: slot_end,
+        timeZone: 'UTC'
+      },
+      attendees: attendees.map(email => ({ email })),
+      conferenceData: {
+        createRequest: {
+          requestId: crypto.randomBytes(16).toString('hex'),
+          conferenceSolutionKey: { type: 'hangoutsMeet' }
+        }
+      }
+    };
+
+    // Create event on creator's calendar
+    const createdEvent = await googleAuth.createCalendarEvent(
+      request.creator_google_token,
+      event
+    );
+
+    // Update booking request status
+    await pool.query(
+      `UPDATE booking_requests 
+       SET status = 'booked',
+           booked_slot_start = $1,
+           booked_slot_end = $2,
+           calendar_event_id = $3,
+           updated_at = NOW()
+       WHERE unique_token = $4`,
+      [slot_start, slot_end, createdEvent.id, token]
+    );
+
+    res.json({
+      success: true,
+      message: 'Meeting booked successfully!',
+      event_id: createdEvent.id,
+      meet_link: createdEvent.hangoutLink,
+      slot_start,
+      slot_end
+    });
+
+  } catch (error) {
+    console.error('Error booking slot:', error);
+    res.status(500).json({ error: 'Failed to book slot' });
+  }
+});
+
+/* ============================================================================
+   END OF PHASE 2 ENDPOINTS
+   ========================================================================== */
 
       // Email HTML template
       const emailHtml = `
