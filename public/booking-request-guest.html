@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meeting Request - ScheduleSync</title>
+    <title>Schedule Your Meeting</title>
     <style>
         * {
             margin: 0;
@@ -12,204 +12,192 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             padding: 20px;
         }
 
         .container {
-            max-width: 800px;
-            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
-        .card {
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
             margin-bottom: 20px;
         }
 
-        .header {
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
             text-align: center;
-            margin-bottom: 40px;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
         }
 
-        .header h1 {
-            font-size: 32px;
-            color: #1f2937;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: #6b7280;
-            font-size: 16px;
-        }
-
-        .team-info {
-            background: #f9fafb;
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-        }
-
-        .team-name {
-            font-size: 24px;
+        .step-title {
             font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 8px;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
         }
 
-        .team-description {
-            color: #6b7280;
+        .step-description {
+            color: #666;
             line-height: 1.6;
         }
 
-        .custom-message {
-            background: #eff6ff;
-            border-left: 4px solid #3b82f6;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 20px 0;
-            font-style: italic;
-            color: #1e40af;
-        }
-
-        .attendees {
-            margin: 30px 0;
-        }
-
-        .attendees h3 {
-            font-size: 18px;
-            color: #374151;
-            margin-bottom: 16px;
-        }
-
-        .attendee {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            background: #f9fafb;
-            border-radius: 8px;
-            margin-bottom: 8px;
-        }
-
-        .attendee-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            margin-right: 12px;
-        }
-
-        .attendee-info {
-            flex: 1;
-        }
-
-        .attendee-name {
-            font-weight: 600;
-            color: #1f2937;
-        }
-
-        .attendee-email {
-            font-size: 14px;
-            color: #6b7280;
-        }
-
         .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 14px 32px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            gap: 8px;
-        }
-
-        .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
             width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
             margin-top: 20px;
         }
 
-        .btn-primary:hover {
+        .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
         }
 
-        .btn-google {
-            background: white;
-            color: #1f2937;
-            border: 2px solid #e5e7eb;
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        .btn-google:hover {
-            background: #f9fafb;
+        .slots-container {
+            display: none;
+            margin-top: 30px;
         }
 
-        .slots-grid {
+        .slot-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
             margin-top: 20px;
         }
 
-        .slot {
-            padding: 16px;
-            border: 2px solid #e5e7eb;
+        .slot-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            padding: 12px;
             border-radius: 8px;
-            text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            text-align: center;
         }
 
-        .slot:hover {
+        .slot-btn:hover {
             border-color: #667eea;
-            background: #f5f7ff;
+            background: #f0f4ff;
         }
 
-        .slot.selected {
-            border-color: #667eea;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .slot-btn.selected {
+            background: #667eea;
             color: white;
-        }
-
-        .slot-date {
-            font-weight: 600;
-            margin-bottom: 4px;
+            border-color: #667eea;
         }
 
         .slot-time {
+            font-weight: 600;
             font-size: 14px;
-            opacity: 0.8;
+        }
+
+        .slot-date {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .slot-btn.selected .slot-date {
+            color: white;
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .success-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .success-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .success-description {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .meet-link {
+            background: #f0f4ff;
+            padding: 16px;
+            border-radius: 10px;
+            margin-top: 20px;
+            word-break: break-all;
+        }
+
+        .meet-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
         }
 
         .loading {
+            display: none;
             text-align: center;
-            padding: 40px;
-            color: #6b7280;
+            padding: 20px;
         }
 
         .spinner {
-            border: 3px solid #f3f4f6;
+            border: 3px solid #f3f3f3;
             border-top: 3px solid #667eea;
             border-radius: 50%;
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
+            margin: 0 auto;
         }
 
         @keyframes spin {
@@ -217,369 +205,285 @@
             100% { transform: rotate(360deg); }
         }
 
-        .success {
-            text-align: center;
-            padding: 40px;
-        }
-
-        .success-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .success h2 {
-            color: #1f2937;
-            margin-bottom: 12px;
-        }
-
-        .success p {
-            color: #6b7280;
-            line-height: 1.6;
-        }
-
-        .meet-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 24px;
-            background: #f0fdf4;
-            border: 2px solid #22c55e;
-            border-radius: 8px;
-            color: #16a34a;
-            text-decoration: none;
-            font-weight: 600;
-            margin-top: 20px;
-        }
-
-        .meet-link:hover {
-            background: #dcfce7;
-        }
-
-        .error {
-            background: #fef2f2;
-            border: 2px solid #ef4444;
-            border-radius: 8px;
+        .error-message {
+            background: #fee;
+            color: #c33;
             padding: 16px;
-            color: #991b1b;
-            margin-bottom: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
         }
 
-        .hidden {
-            display: none;
+        .connected-badge {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Loading State -->
-        <div id="loadingState" class="card">
-            <div class="loading">
-                <div class="spinner"></div>
-                <p>Loading booking request...</p>
+        <div id="mainContent">
+            <h1>📅 Schedule Your Meeting</h1>
+            <p class="subtitle">Let's find the perfect time for our meeting</p>
+
+            <div class="step">
+                <div class="step-title">
+                    <span class="step-number">1</span>
+                    Connect Your Calendar
+                    <span id="connectedBadge" class="connected-badge" style="display: none;">✓ Connected</span>
+                </div>
+                <div class="step-description">
+                    Connect your Google Calendar so we can find times that work for both of us.
+                </div>
+                <button id="connectBtn" class="btn">
+                    🔗 Connect Google Calendar
+                </button>
             </div>
+
+            <div id="slotsSection" class="slots-container">
+                <div class="step">
+                    <div class="step-title">
+                        <span class="step-number">2</span>
+                        Choose Your Time
+                    </div>
+                    <div class="step-description">
+                        Select a time slot that works best for you.
+                    </div>
+                    <div class="loading" id="slotsLoading">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 16px; color: #666;">Finding available times...</p>
+                    </div>
+                    <div id="slotsGrid" class="slot-grid"></div>
+                    <button id="bookBtn" class="btn" style="display: none;" disabled>
+                        📆 Confirm Booking
+                    </button>
+                </div>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
         </div>
 
-        <!-- Main Content -->
-        <div id="mainContent" class="card hidden">
-            <div class="header">
-                <h1>📅 Meeting Request</h1>
-                <p id="headerText">You've been invited to schedule a meeting</p>
+        <div id="successContent" class="success-message">
+            <div class="success-icon">🎉</div>
+            <div class="success-title">Meeting Booked!</div>
+            <div class="success-description">
+                Your meeting has been added to both calendars. You'll receive a confirmation email shortly.
             </div>
-
-            <div id="errorMessage" class="error hidden"></div>
-
-            <!-- Team Info -->
-            <div class="team-info">
-                <div class="team-name" id="teamName"></div>
-                <div class="team-description" id="teamDescription"></div>
-            </div>
-
-            <!-- Custom Message -->
-            <div id="customMessage" class="custom-message hidden"></div>
-
-            <!-- Attendees -->
-            <div class="attendees">
-                <h3>Meeting Attendees</h3>
-                <div id="attendeesList"></div>
-            </div>
-
-            <!-- Step 1: Connect Calendar -->
-            <div id="connectStep" class="hidden">
-                <h3 style="margin-bottom: 16px;">Step 1: Connect Your Calendar</h3>
-                <p style="color: #6b7280; margin-bottom: 20px;">
-                    To find the best time for everyone, we need to check your availability.
-                </p>
-                <button class="btn btn-google" onclick="connectGoogle()">
-                    <svg width="20" height="20" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    Connect Google Calendar
-                </button>
-            </div>
-
-            <!-- Step 2: Select Time Slot -->
-            <div id="slotsStep" class="hidden">
-                <h3 style="margin-bottom: 16px;">Step 2: Select a Time</h3>
-                <p style="color: #6b7280; margin-bottom: 20px;">
-                    These times work for everyone:
-                </p>
-                <div id="slotsGrid" class="slots-grid"></div>
-                <button class="btn btn-primary" onclick="bookSlot()" disabled id="bookButton">
-                    📅 Book Selected Time
-                </button>
-            </div>
-
-            <!-- Success State -->
-            <div id="successState" class="success hidden">
-                <div class="success-icon">🎉</div>
-                <h2>Meeting Booked!</h2>
-                <p id="successMessage"></p>
-                <a id="meetLink" class="meet-link hidden" target="_blank">
-                    🎥 Join Meeting
-                </a>
+            <div id="meetLinkContainer" class="meet-link" style="display: none;">
+                <strong>Google Meet Link:</strong><br>
+                <a id="meetLink" href="#" target="_blank"></a>
             </div>
         </div>
     </div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = window.location.pathname.split('/').pop();
-        let bookingRequest = null;
+        // 🔥 FIXED: Use relative URLs so it works on any domain
+        const BASE_URL = window.location.origin;
+        
+        let requestId = null;
         let selectedSlot = null;
         let availableSlots = [];
 
-        // Load booking request
-        async function loadBookingRequest() {
-            try {
-                const response = await fetch(`/api/booking-request/${token}`);
-                const data = await response.json();
+        // Get request ID from URL
+        function init() {
+            const params = new URLSearchParams(window.location.search);
+            requestId = params.get('token');
 
-                if (!response.ok) {
-                    showError(data.error || 'Failed to load booking request');
-                    return;
-                }
-
-                bookingRequest = data;
-                displayBookingRequest();
-
-                // Check if calendar already connected
-                if (urlParams.get('calendar_connected') === 'true' || data.guest_calendar_connected) {
-                    loadAvailableSlots();
-                }
-
-            } catch (error) {
-                console.error('Error loading booking request:', error);
-                showError('Failed to load booking request');
-            }
-        }
-
-        function displayBookingRequest() {
-            document.getElementById('loadingState').classList.add('hidden');
-            document.getElementById('mainContent').classList.remove('hidden');
-
-            document.getElementById('teamName').textContent = bookingRequest.team_name;
-            
-            if (bookingRequest.team_description) {
-                document.getElementById('teamDescription').textContent = bookingRequest.team_description;
-            } else {
-                document.getElementById('teamDescription').textContent = `Meeting with ${bookingRequest.creator_name}`;
-            }
-
-            if (bookingRequest.custom_message) {
-                const msgEl = document.getElementById('customMessage');
-                msgEl.textContent = `"${bookingRequest.custom_message}"`;
-                msgEl.classList.remove('hidden');
-            }
-
-            // Display attendees
-            const attendeesList = document.getElementById('attendeesList');
-            attendeesList.innerHTML = '';
-
-            // Add guest (recipient)
-            attendeesList.innerHTML += `
-                <div class="attendee">
-                    <div class="attendee-avatar">${bookingRequest.recipient_name.charAt(0).toUpperCase()}</div>
-                    <div class="attendee-info">
-                        <div class="attendee-name">${bookingRequest.recipient_name} (You)</div>
-                        <div class="attendee-email">${bookingRequest.recipient_email}</div>
-                    </div>
-                </div>
-            `;
-
-            // Add team members
-            bookingRequest.team_members.forEach(member => {
-                attendeesList.innerHTML += `
-                    <div class="attendee">
-                        <div class="attendee-avatar">${(member.name || member.email).charAt(0).toUpperCase()}</div>
-                        <div class="attendee-info">
-                            <div class="attendee-name">${member.name || member.email}</div>
-                            <div class="attendee-email">${member.email}</div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            // Show appropriate step
-            if (bookingRequest.status === 'booked') {
-                showSuccess();
-            } else if (bookingRequest.guest_calendar_connected) {
-                document.getElementById('slotsStep').classList.remove('hidden');
-                loadAvailableSlots();
-            } else {
-                document.getElementById('connectStep').classList.remove('hidden');
-            }
-        }
-
-        async function connectGoogle() {
-            try {
-                const response = await fetch(`/api/booking-request/${token}/connect-google`);
-                const data = await response.json();
-
-                if (data.authUrl) {
-                    window.location.href = data.authUrl;
-                }
-            } catch (error) {
-                console.error('Error connecting Google:', error);
-                showError('Failed to connect Google Calendar');
-            }
-        }
-
-        async function loadAvailableSlots() {
-            try {
-                document.getElementById('connectStep').classList.add('hidden');
-                document.getElementById('slotsStep').classList.remove('hidden');
-
-                const response = await fetch(`/api/booking-request/${token}/available-slots`);
-                const data = await response.json();
-
-                if (!response.ok) {
-                    showError(data.error || 'Failed to load available slots');
-                    return;
-                }
-
-                availableSlots = data.available_slots;
-                displaySlots();
-
-            } catch (error) {
-                console.error('Error loading slots:', error);
-                showError('Failed to load available time slots');
-            }
-        }
-
-        function displaySlots() {
-            const grid = document.getElementById('slotsGrid');
-            grid.innerHTML = '';
-
-            if (availableSlots.length === 0) {
-                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #6b7280;">No available time slots found. Please contact the organizer.</p>';
+            if (!requestId) {
+                showError('Invalid booking link. Please check your email for the correct link.');
                 return;
             }
 
-            availableSlots.forEach((slot, index) => {
-                const slotEl = document.createElement('div');
-                slotEl.className = 'slot';
-                slotEl.innerHTML = `
-                    <div class="slot-date">${new Date(slot.start).toLocaleDateString('en-US', { 
-                        weekday: 'short',
-                        month: 'short', 
-                        day: 'numeric' 
-                    })}</div>
-                    <div class="slot-time">${slot.time}</div>
-                `;
-                slotEl.onclick = () => selectSlot(index);
-                grid.appendChild(slotEl);
-            });
+            // Check if just connected calendar
+            if (params.get('connected') === 'true') {
+                document.getElementById('connectedBadge').style.display = 'inline-block';
+                document.getElementById('connectBtn').textContent = '✓ Calendar Connected';
+                document.getElementById('connectBtn').disabled = true;
+                loadAvailableSlots();
+            }
+
+            // Check for errors
+            if (params.get('error')) {
+                showError('Failed to connect calendar. Please try again.');
+            }
         }
 
-        function selectSlot(index) {
-            document.querySelectorAll('.slot').forEach((el, i) => {
-                if (i === index) {
-                    el.classList.add('selected');
-                } else {
-                    el.classList.remove('selected');
-                }
-            });
-
-            selectedSlot = availableSlots[index];
-            document.getElementById('bookButton').disabled = false;
-        }
-
-        async function bookSlot() {
-            if (!selectedSlot) return;
-
-            const button = document.getElementById('bookButton');
-            button.disabled = true;
-            button.textContent = 'Booking...';
-
+        // Connect Google Calendar
+        document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                const response = await fetch(`/api/booking-request/${token}/book`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        slot_start: selectedSlot.start,
-                        slot_end: selectedSlot.end
-                    })
-                });
+                // 🔥 FIXED: Use relative URL that works on any domain
+                const response = await fetch(`${BASE_URL}/api/booking-request/${requestId}/auth-url`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to get authorization URL');
+                }
 
                 const data = await response.json();
+                
+                // Redirect to Google OAuth
+                window.location.href = data.authUrl;
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to connect calendar. Please try again.');
+            }
+        });
 
+        // Load available time slots
+        async function loadAvailableSlots() {
+            document.getElementById('slotsSection').style.display = 'block';
+            document.getElementById('slotsLoading').style.display = 'block';
+
+            try {
+                // 🔥 FIXED: Use relative URL
+                const response = await fetch(`${BASE_URL}/api/booking-request/${requestId}/available-slots`);
+                
                 if (!response.ok) {
-                    showError(data.error || 'Failed to book slot');
-                    button.disabled = false;
-                    button.textContent = '📅 Book Selected Time';
+                    if (response.status === 400) {
+                        const data = await response.json();
+                        if (data.needsAuth) {
+                            showError('Please connect your calendar first.');
+                            return;
+                        }
+                    }
+                    throw new Error('Failed to load available slots');
+                }
+
+                const data = await response.json();
+                availableSlots = data.slots;
+
+                document.getElementById('slotsLoading').style.display = 'none';
+
+                if (availableSlots.length === 0) {
+                    showError('No available time slots found. Please contact the host.');
                     return;
                 }
 
-                // Show success
-                document.getElementById('slotsStep').classList.add('hidden');
-                showSuccess(data);
-
+                renderSlots(availableSlots);
             } catch (error) {
-                console.error('Error booking slot:', error);
-                showError('Failed to book slot');
-                button.disabled = false;
-                button.textContent = '📅 Book Selected Time';
+                console.error('Error:', error);
+                document.getElementById('slotsLoading').style.display = 'none';
+                showError('Failed to load available times. Please try again.');
             }
         }
 
-        function showSuccess(data) {
-            const successState = document.getElementById('successState');
-            successState.classList.remove('hidden');
+        // Render time slots
+        function renderSlots(slots) {
+            const grid = document.getElementById('slotsGrid');
+            grid.innerHTML = '';
 
-            if (data && data.slot_start) {
-                const startDate = new Date(data.slot_start);
-                document.getElementById('successMessage').textContent = 
-                    `Your meeting is scheduled for ${startDate.toLocaleString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    })}. Calendar invites have been sent to all attendees.`;
+            slots.forEach((slot, index) => {
+                const startTime = new Date(slot.start);
+                const endTime = new Date(slot.end);
 
-                if (data.meet_link) {
-                    const meetLink = document.getElementById('meetLink');
-                    meetLink.href = data.meet_link;
-                    meetLink.classList.remove('hidden');
+                const slotBtn = document.createElement('div');
+                slotBtn.className = 'slot-btn';
+                slotBtn.innerHTML = `
+                    <div class="slot-time">
+                        ${formatTime(startTime)} - ${formatTime(endTime)}
+                    </div>
+                    <div class="slot-date">
+                        ${formatDate(startTime)}
+                    </div>
+                `;
+
+                slotBtn.addEventListener('click', () => {
+                    // Remove previous selection
+                    document.querySelectorAll('.slot-btn').forEach(btn => {
+                        btn.classList.remove('selected');
+                    });
+
+                    // Select this slot
+                    slotBtn.classList.add('selected');
+                    selectedSlot = slot;
+
+                    // Enable book button
+                    const bookBtn = document.getElementById('bookBtn');
+                    bookBtn.style.display = 'block';
+                    bookBtn.disabled = false;
+                });
+
+                grid.appendChild(slotBtn);
+            });
+        }
+
+        // Book the meeting
+        document.getElementById('bookBtn').addEventListener('click', async () => {
+            if (!selectedSlot) return;
+
+            const bookBtn = document.getElementById('bookBtn');
+            bookBtn.disabled = true;
+            bookBtn.textContent = '⏳ Booking...';
+
+            try {
+                // 🔥 FIXED: Use relative URL
+                const response = await fetch(`${BASE_URL}/api/booking-request/${requestId}/book`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        startTime: selectedSlot.start,
+                        endTime: selectedSlot.end
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to book meeting');
                 }
-            } else {
-                document.getElementById('successMessage').textContent = 
-                    'This meeting has already been booked. Check your email for details.';
+
+                const data = await response.json();
+
+                // Show success message
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('successContent').style.display = 'block';
+
+                // Show Google Meet link if available
+                if (data.meetLink) {
+                    document.getElementById('meetLinkContainer').style.display = 'block';
+                    document.getElementById('meetLink').href = data.meetLink;
+                    document.getElementById('meetLink').textContent = data.meetLink;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                bookBtn.disabled = false;
+                bookBtn.textContent = '📆 Confirm Booking';
+                showError('Failed to book meeting. Please try again.');
             }
+        });
+
+        // Format time (e.g., "2:00 PM")
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
         }
 
+        // Format date (e.g., "Mon, Jan 15")
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Show error message
         function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.classList.remove('hidden');
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
         }
 
         // Initialize
-        loadBookingRequest();
+        init();
     </script>
 </body>
 </html>
