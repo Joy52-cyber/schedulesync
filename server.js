@@ -56,6 +56,8 @@ const pool = new Pool({
 // ROBUST AUTO-MIGRATION - Replace runMigrations() in server.js
 // This version adds missing columns instead of dropping tables
 
+// POSTGRESQL-COMPATIBLE MIGRATION - Replace runMigrations() in server.js
+
 async function runMigrations() {
   console.log('🔄 Running database migrations...');
   try {
@@ -99,15 +101,19 @@ async function runMigrations() {
     `);
     console.log('✅ team_members table exists');
 
+    // Check if is_owner column exists
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'team_members' 
+      AND column_name = 'is_owner'
+    `);
+
     // Add is_owner column if it doesn't exist
-    try {
-      await pool.query(`
-        ALTER TABLE team_members 
-        ADD COLUMN IF NOT EXISTS is_owner BOOLEAN DEFAULT FALSE
-      `);
-      console.log('✅ is_owner column added/verified');
-    } catch (alterError) {
-      // Column might already exist, that's okay
+    if (columnCheck.rows.length === 0) {
+      await pool.query(`ALTER TABLE team_members ADD COLUMN is_owner BOOLEAN DEFAULT FALSE`);
+      console.log('✅ is_owner column added');
+    } else {
       console.log('✅ is_owner column already exists');
     }
 
@@ -131,9 +137,12 @@ async function runMigrations() {
     
     console.log('🎉 All migrations completed successfully!');
   } catch (error) {
-    console.error('❌ Migration error:', error);
+    console.error('❌ Migration error:', error.message);
+    // Continue execution even if migration fails
   }
 }
+
+runMigrations();
 
 runMigrations();
 
