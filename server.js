@@ -1049,7 +1049,6 @@ app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
     const result = await pool.query(
   'SELECT id, email, name FROM users WHERE id = $1',
   [userId]
-);
     );
 
     console.log('📋 Query result:', result.rows);
