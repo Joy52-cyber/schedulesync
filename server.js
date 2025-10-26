@@ -2485,17 +2485,14 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
     console.log('🔗 Booking URL:', bookingUrl);
     
     // Send email to guest (if email service available)
-    if (emailService) {
-      const emailHtml = `
-        <h2>You've been invited to schedule a meeting</h2>
-        <p>Hi ${guest_name},</p>
-        <p>${team.name} would like to meet with you. Please submit your availability so we can find a time that works for both of you.</p>
-        <p><a href="${bookingUrl}" style="background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Submit Your Availability</a></p>
-        <p>Or copy this link: ${bookingUrl}</p>
-      `;
-      
-      emailService.sendEmail(guest_email, `Meeting Request from ${team.name}`, emailHtml)
-        .catch(err => console.error('Email error:', err));
+    if (emailService && emailService.sendBookingConfirmation) {
+      // Create a simple notification
+      try {
+        // For now, just log - we can add a proper email function later
+        console.log('📧 Would send email to:', guest_email);
+      } catch (err) {
+        console.error('Email error:', err);
+      }
     }
     
     res.status(201).json({
@@ -2628,23 +2625,16 @@ app.post('/api/availability-requests/:token/submit', async (req, res) => {
     const overlap = await calculateOverlap(request.team_id, request.id);
     
     // Send email to owner (if email service available)
-    if (emailService) {
+    if (emailService && emailService.sendBookingConfirmation) {
       const teamResult = await pool.query(
         'SELECT t.*, u.email as owner_email, u.name as owner_name FROM teams t JOIN users u ON t.owner_id = u.id WHERE t.id = $1',
         [request.team_id]
       );
       if (teamResult.rows.length > 0) {
         const team = teamResult.rows[0];
-        const emailHtml = `
-          <h2>Guest Availability Submitted</h2>
-          <p>Hi ${team.owner_name},</p>
-          <p>${request.guest_name} has submitted their availability.</p>
-          <p><strong>${overlap.length}</strong> time slots found where both of you are available.</p>
-          <p>View the overlap and book a time in your dashboard.</p>
-        `;
-        
-        emailService.sendEmail(team.owner_email, `${request.guest_name} submitted availability`, emailHtml)
-          .catch(err => console.error('Email error:', err));
+        // For now, just log - we can add a proper email function later
+        console.log('📧 Would send email to owner:', team.owner_email);
+        console.log('📊 Overlap found:', overlap.length, 'slots');
       }
     }
     
