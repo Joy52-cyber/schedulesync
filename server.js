@@ -1919,7 +1919,7 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
 
     // Get user info
     const userResult = await pool.query(
-      'SELECT display_name, email FROM users WHERE id = $1',
+      'SELECT name, email FROM users WHERE id = $1',
       [userId]
     );
     const user = userResult.rows[0];
@@ -1965,7 +1965,7 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
       const memberNames = [];
       for (const memberId of team_members) {
         const memberResult = await pool.query(
-          'SELECT display_name, email FROM users WHERE id = $1',
+          'SELECT name, email FROM users WHERE id = $1',
           [memberId]
         );
         if (memberResult.rows.length > 0) {
