@@ -386,12 +386,6 @@ function assertMicrosoftConfigured(res) {
   return false;
 }
 
-/* --------------------------------- Health --------------------------------- */
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', env: process.env.NODE_ENV || 'development', time: new Date().toISOString(), dbReady });
-});
-app.get('/ready', (_req, res) => res.json({ status: 'ready' }));
-
 /* --------------------------------- Root ----------------------------------- */
 // API status endpoint moved to /api/status
 app.get('/api/status', (_req, res) => {
