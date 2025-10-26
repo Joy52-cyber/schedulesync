@@ -652,8 +652,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     );
 
     // Create reset link
-    const resetLink = `https://schedulesync-production.up.railway.app/reset-password?token=${resetToken}`;
-
+    // ✅ DYNAMIC - Works on any domain:
+const resetLink = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
     // Send email using nodemailer directly
     if (emailService && emailService.sendPasswordReset) {
       // If email service has password reset method, use it
@@ -1959,8 +1959,10 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
       requests.push(result.rows[0]);
 
       // Create booking link
-      const bookingLink = `${process.env.APP_URL || 'https://schedulesync-production.up.railway.app'}/booking-request/${uniqueToken}`;
-      
+       // Serve booking request guest page with token in path
+app.get('/booking-request/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'booking-request-guest.html'));
+});
       // Get team member names
       const memberNames = [];
       for (const memberId of team_members) {
@@ -2043,10 +2045,10 @@ app.get('/api/booking-request/:token', async (req, res) => {
 });
 
 // Connect guest calendar (Google OAuth)
-app.get('/api/booking-request/:token/connect-google', async (req, res) => {
-  try {
-    const { token } = req.params;
-
+// Serve booking request guest page with token in path
+app.get('/booking-request/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'booking-request-guest.html'));
+});
     // Verify token exists
     const result = await pool.query(
       'SELECT id FROM booking_requests WHERE unique_token = $1',
