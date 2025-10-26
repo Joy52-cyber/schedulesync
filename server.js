@@ -2491,13 +2491,11 @@ app.post('/api/booking-request/:token/book', async (req, res) => {
         </body>
         </html>
       `;
+      
       // ── Build the guest booking link + email html ───────────────────────────────
 const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+const bookingLink = `${baseUrl}/booking-request/${uniqueToken}`;
 
-// Ensure you already created/stored a unique token for this request (uniqueToken)
-const bookingLink = `${baseUrl}/booking-request/${uniqueToken}`; // ← use clean path
-
-// Use a unique var name to avoid "already been declared" errors
 const requestEmailHtml = `
   <div style="font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif;">
     <h2>You're invited to book a meeting</h2>
@@ -2507,27 +2505,13 @@ const requestEmailHtml = `
       <code>${bookingLink}</code>
     </p>
   </div>
-`;
+`; // ← ensure this backtick + semicolon exists
 
-console.log('🔗 Booking link for', recipient.email, '→', bookingLink);
-
-// Send email
-if (emailService) {
-  try {
-    await emailService.sendEmail({
-      to: recipient.email,
-      subject: `Meeting Request from ${user.display_name || user.email}`,
-      html: requestEmailHtml, // ← use the renamed variable
-    });
-    console.log(`✅ Booking request email sent to ${recipient.email}`);
-  } catch (emailError) {
-    console.error('Error sending email to', recipient.email, ':', emailError);
-  }
-} else {
-  console.log('⚠️ Email service not configured - request created but email not sent');
-}
-
-    
+await emailService.sendEmail({
+  to: recipient.email,
+  subject: `Meeting Request from ${user.display_name || user.email}`,
+  html: requestEmailHtml,
+});
 
 /* ============================================================================
    END OF PHASE 1 ENDPOINTS
@@ -4446,9 +4430,20 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 /* ---------------------------- Graceful Shutdown --------------------------- */
-function shutdown(sig) {
-  console.log(`${sig} received. Shutting down...`);
-  server.close(() => process.exit(0));
+function shutdown(signal) {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server?.close(() => {
+    console.log('HTTP server closed.');
+    pool?.end?.().then(() => {
+      console.log('DB pool closed. Bye!');
+      process.exit(0);
+    }).catch(() => process.exit(0));
+  });
 }
-process.on('SIGINT', () => shutdown('SIGINT'));
+
+const server = app.listen(PORT, () => {
+  console.log(`✅ Server listening on http://0.0.0.0:${PORT}`);
+});
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
