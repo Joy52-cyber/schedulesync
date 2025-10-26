@@ -325,14 +325,20 @@ app.get('/api/teams/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT t.*, COUNT(tm.id) as member_count
+      `SELECT t.*, u.name AS owner_name, u.email AS owner_email, COUNT(tm.id) AS member_count
        FROM teams t
+       JOIN users u ON t.owner_id = u.id
        LEFT JOIN team_members tm ON t.id = tm.team_id
        WHERE t.id = $1 AND t.owner_id = $2
-       GROUP BY t.id`,
+       GROUP BY t.id, u.name, u.email`,
       [id, req.userId]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Team not found' });
+    res.json({ team: result.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch team' });
+  }
+});
     res.json({ team: result.rows[0] });
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch team' });
@@ -412,7 +418,54 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/availability-requests/:token', async (req, res) => {
+// --- Back-compat: support old endpoint & payload used by "Send Request" button ---
+app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
+  try {
+    const { team_id, guest_name, guest_email, guest_notes, recipients } = req.body || {};
+
+    // Validate team ownership once
+    const team = await pool
+      .query('SELECT * FROM teams WHERE id=$1 AND owner_id=$2', [team_id, req.userId])
+      .then((r) => r.rows[0]);
+    if (!team) return res.status(403).json({ error: 'Team not found or access denied' });
+
+    const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const out = [];
+
+    const toCreate = Array.isArray(recipients) && recipients.length
+      ? recipients
+      : [{ name: guest_name, email: guest_email, notes: guest_notes }];
+
+    for (const r of toCreate) {
+      if (!r?.email) continue;
+      const token = crypto.randomBytes(32).toString('hex');
+      const created = await pool
+        .query(
+          `INSERT INTO availability_requests (team_id,guest_name,guest_email,guest_notes,token)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [team_id, r.name || '', r.email, r.notes || '', token]
+        )
+        .then((q) => q.rows[0]);
+      const url = `${base}/availability-request/${token}`;
+
+      // best-effort email
+      if (emailService?.sendAvailabilityRequest) {
+        emailService
+          .sendAvailabilityRequest(r.email, r.name || '', team.name, url)
+          .catch((err) => console.error('Email error:', err));
+      }
+
+      out.push({ id: created.id, token, url, guest_email: r.email, guest_name: r.name || '' });
+    }
+
+    res.json({ success: true, requests_created: out.length, requests: out });
+  } catch (e) {
+    console.error('Back-compat booking-request/create error:', e);
+    res.status(500).json({ error: 'Failed to create booking request' });
+  }
+});
+
+app.get('/api/availability-requests/:token', async (req, res) => { async (req, res) => {
   try {
     const { token } = req.params;
 
