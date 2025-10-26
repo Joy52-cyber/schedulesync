@@ -58,8 +58,11 @@ const pool = new Pool({
 
 // POSTGRESQL-COMPATIBLE MIGRATION - Replace runMigrations() in server.js
 
+// SIMPLIFIED MIGRATION - Works without is_owner column
+// Replace runMigrations() in server.js
+
 async function runMigrations() {
-  console.log('🔄 Running database migrations...');
+  console.log('🔄 Running Phase 1 database migrations...');
   try {
     // Create booking_requests table
     await pool.query(`
@@ -80,73 +83,27 @@ async function runMigrations() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('✅ booking_requests table created');
+    console.log('✅ booking_requests table ready');
 
     // Create indexes
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
-    console.log('✅ Indexes created');
+    console.log('✅ booking_requests indexes ready');
     
-    // Create team_members table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS team_members (
-        id SERIAL PRIMARY KEY,
-        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        role VARCHAR(50) DEFAULT 'member',
-        added_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(team_id, user_id)
-      )
-    `);
-    console.log('✅ team_members table exists');
-
-    // Check if is_owner column exists
-    const columnCheck = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'team_members' 
-      AND column_name = 'is_owner'
-    `);
-
-    // Add is_owner column if it doesn't exist
-    if (columnCheck.rows.length === 0) {
-      await pool.query(`ALTER TABLE team_members ADD COLUMN is_owner BOOLEAN DEFAULT FALSE`);
-      console.log('✅ is_owner column added');
-    } else {
-      console.log('✅ is_owner column already exists');
-    }
-
-    // Create team_members indexes
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`);
-    console.log('✅ team_members indexes created');
-    
-    // Add existing team owners to team_members
-    await pool.query(`
-      INSERT INTO team_members (team_id, user_id, role, is_owner)
-      SELECT id, owner_id, 'owner', TRUE
-      FROM teams
-      WHERE NOT EXISTS (
-        SELECT 1 FROM team_members 
-        WHERE team_members.team_id = teams.id 
-        AND team_members.user_id = teams.owner_id
-      )
-    `);
-    console.log('✅ Team owners added to team_members');
-    
-    console.log('🎉 All migrations completed successfully!');
+    console.log('🎉 Phase 1 migrations completed!');
   } catch (error) {
     console.error('❌ Migration error:', error.message);
-    // Continue execution even if migration fails
   }
 }
 
-runMigrations();
+// Only run migrations once
+if (!global.migrationsRun) {
+  global.migrationsRun = true;
+  runMigrations();
+}
 
-runMigrations();
 
-runMigrations();
 
 // Google - Support both variable names
 const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
@@ -1947,68 +1904,74 @@ runMigrations();
    ========================================================================== */
 
 // Create booking request and send emails
-app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
+// 1. Define the function FIRST
+async function runMigrations() {
+  console.log('🔄 Running Phase 1 database migrations...');
   try {
-    const userId = req.userId;
-    const { team_id, team_members, recipients, custom_message } = req.body;
+    await pool.query(`CREATE TABLE IF NOT EXISTS booking_requests (...)`);
+    console.log('✅ booking_requests table ready');
+    
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
+    console.log('✅ booking_requests indexes ready');
+    
+    console.log('🎉 Phase 1 migrations completed!');
+  } catch (error) {
+    console.error('❌ Migration error:', error.message);
+  }
+}
 
-    // Validation
-    if (!team_id || !team_members || !recipients || recipients.length === 0) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+// 2. Call the function AFTER defining it
+if (!global.migrationsRun) {
+  global.migrationsRun = true;
+  runMigrations();
+}
 
-    // Verify team ownership
-    const teamCheck = await pool.query(
-      'SELECT * FROM teams WHERE id = $1 AND owner_id = $2',
-      [team_id, userId]
-    );
+// SIMPLIFIED MIGRATION - Works without is_owner column
+// Replace runMigrations() in server.js
 
-    if (teamCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Not authorized to create requests for this team' });
-    }
+async function runMigrations() {
+  console.log('🔄 Running Phase 1 database migrations...');
+  try {
+    // Create booking_requests table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS booking_requests (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255) NOT NULL,
+        team_members INTEGER[] NOT NULL,
+        custom_message TEXT,
+        unique_token VARCHAR(255) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        guest_calendar_connected BOOLEAN DEFAULT FALSE,
+        booked_slot_start TIMESTAMP,
+        booked_slot_end TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ booking_requests table ready');
 
-    const team = teamCheck.rows[0];
+    // Create indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
+    console.log('✅ booking_requests indexes ready');
+    
+    console.log('🎉 Phase 1 migrations completed!');
+  } catch (error) {
+    console.error('❌ Migration error:', error.message);
+  }
+}
 
-    // Get user info
-    const userResult = await pool.query(
-      'SELECT display_name, email FROM users WHERE id = $1',
-      [userId]
-    );
-    const user = userResult.rows[0];
-
-    // Create booking requests for each recipient
-    const requests = [];
-
-    for (const recipient of recipients) {
-      // Generate unique token
-      const uniqueToken = require('crypto').randomBytes(32).toString('hex');
-
-      // Insert booking request
-      const result = await pool.query(
-        `INSERT INTO booking_requests (
-          team_id, 
-          created_by, 
-          recipient_email, 
-          recipient_name, 
-          team_members, 
-          custom_message,
-          unique_token, 
-          status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING *`,
-        [
-          team_id,
-          userId,
-          recipient.email,
-          recipient.name,
-          team_members,
-          custom_message || '',
-          uniqueToken,
-          'pending'
-        ]
-      );
-
-      requests.push(result.rows[0]);
+// Only run migrations once
+if (!global.migrationsRun) {
+  global.migrationsRun = true;
+  runMigrations();
+}
 
       // Create booking link
       const bookingLink = `${process.env.APP_URL}/booking-request/${uniqueToken}`;
