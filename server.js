@@ -2491,17 +2491,14 @@ app.post('/api/booking-request/:token/book', async (req, res) => {
         </body>
         </html>
       `;
-
       // ── Build the guest booking link + email html ───────────────────────────────
 const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
 
-// Ensure you have a unique token per request; reuse if you already generated one
-// e.g., const uniqueToken = crypto.randomBytes(16).toString('hex'); // (if not yet defined)
+// Ensure you already created/stored a unique token for this request (uniqueToken)
+const bookingLink = `${baseUrl}/booking-request/${uniqueToken}`; // ← use clean path
 
-const bookingLink = `${baseUrl}/booking.html?token=${uniqueToken}`;
-
-// If you already have emailHtml earlier, keep that; otherwise define it here:
-const emailHtml = `
+// Use a unique var name to avoid "already been declared" errors
+const requestEmailHtml = `
   <div style="font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif;">
     <h2>You're invited to book a meeting</h2>
     <p>${user.display_name || user.name || user.email} would like to meet with you.</p>
@@ -2514,35 +2511,23 @@ const emailHtml = `
 
 console.log('🔗 Booking link for', recipient.email, '→', bookingLink);
 
-
-      // Send email
-      if (emailService) {
-        try {
-          await emailService.sendEmail({
-            to: recipient.email,
-            subject: `Meeting Request from ${user.display_name || user.email}`,
-            html: emailHtml
-          });
-          console.log(`✅ Booking request email sent to ${recipient.email}`);
-        } catch (emailError) {
-          console.error('Error sending email to', recipient.email, ':', emailError);
-        }
-      } else {
-        console.log('⚠️ Email service not configured - request created but email not sent');
-      }
-    }
-
-    res.json({
-      success: true,
-      requests_created: requests.length,
-      requests: requests
+// Send email
+if (emailService) {
+  try {
+    await emailService.sendEmail({
+      to: recipient.email,
+      subject: `Meeting Request from ${user.display_name || user.email}`,
+      html: requestEmailHtml, // ← use the renamed variable
     });
-
-  } catch (error) {
-    console.error('Error creating booking request:', error);
-    res.status(500).json({ error: 'Failed to create booking request' });
+    console.log(`✅ Booking request email sent to ${recipient.email}`);
+  } catch (emailError) {
+    console.error('Error sending email to', recipient.email, ':', emailError);
   }
-});
+} else {
+  console.log('⚠️ Email service not configured - request created but email not sent');
+}
+
+    
 
 /* ============================================================================
    END OF PHASE 1 ENDPOINTS
