@@ -1960,9 +1960,9 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
 
       // Create booking link
        // Serve booking request guest page with token in path
-app.get('/booking-request/:token', (req, res) => {
+/*app.get('/booking-request/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'booking-request-guest.html'));
-});
+});*/
       // Get team member names
       const memberNames = [];
       for (const memberId of team_members) {
@@ -2688,8 +2688,8 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
       requests.push(result.rows[0]);
 
       // Create booking link
-      const bookingLink = `${process.env.APP_URL}/booking-request/${uniqueToken}`;
-      
+      // Line 2682 - CORRECT:
+const bookingLink = `${req.protocol}://${req.get('host')}/booking-request-guest.html?token=${uniqueToken}`;
       // Get team member names
       const memberNames = [];
       for (const memberId of team_members) {
