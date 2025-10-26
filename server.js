@@ -50,6 +50,72 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
+// Auto-run migrations on startup
+async function runMigrations() {
+  console.log('🔄 Running database migrations...');
+  try {
+    // Create booking_requests table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS booking_requests (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255) NOT NULL,
+        team_members INTEGER[] NOT NULL,
+        custom_message TEXT,
+        unique_token VARCHAR(255) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        guest_calendar_connected BOOLEAN DEFAULT FALSE,
+        booked_slot_start TIMESTAMP,
+        booked_slot_end TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ booking_requests table created');
+
+    // Create indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
+    console.log('✅ Indexes created');
+    
+    // Create team_members table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50) DEFAULT 'member',
+        is_owner BOOLEAN DEFAULT FALSE,
+        added_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(team_id, user_id)
+      )
+    `);
+    console.log('✅ team_members table created');
+
+    // Create team_members indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`);
+    
+    // Add existing team owners to team_members
+    await pool.query(`
+      INSERT INTO team_members (team_id, user_id, role, is_owner)
+      SELECT id, owner_id, 'owner', TRUE
+      FROM teams
+      ON CONFLICT (team_id, user_id) DO NOTHING
+    `);
+    console.log('✅ Team owners added to team_members');
+    
+    console.log('🎉 All migrations completed successfully!');
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+  }
+}
+
+runMigrations();
+
 // Google - Support both variable names
 const GOOGLE_CLIENT_ID     = clean(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_CLIENT_SECRET = clean(process.env.GOOGLE_CLIENT_SECRET);
@@ -1718,7 +1784,431 @@ app.post('/api/booking/create', async (req, res) => {
     res.status(500).json({ error: 'Failed to create booking' });
   }
 });
+// ... existing code ...
 
+/* ==========================================================================
+   BOOKINGS API ENDPOINTS
+   ========================================================================== */
+
+app.post('/api/bookings', handleBookingSubmission);
+app.post('/api/teams/bookings/public', handleBookingSubmission);
+
+/* ============================================================================
+   SMART BOOKING ASSISTANT API ENDPOINTS  ← Your existing smart booking code
+   ========================================================================== */
+
+app.post('/api/booking/find-slots', async (req, res) => {
+  // ... existing smart booking code ...
+});
+
+app.post('/api/booking/create', async (req, res) => {
+  // ... existing smart booking code ...
+});
+
+/* ============================================================================
+   BOOKING REQUEST API ENDPOINTS - PHASE 1  ← ADD NEW CODE HERE
+   ========================================================================== */
+
+app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
+  // ... paste code from booking-request-endpoints.js ...
+});
+
+app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
+  // ... paste code from booking-request-endpoints.js ...
+});
+/* ============================================================================
+   STEP 1: ADD THIS AFTER YOUR DATABASE POOL INITIALIZATION
+   
+   Find this in your server.js (around line 20-40):
+   
+   const pool = new Pool({
+     connectionString: process.env.DATABASE_URL,
+     ssl: { rejectUnauthorized: false }
+   });
+   
+   ADD THE CODE BELOW RIGHT AFTER IT:
+   ========================================================================== */
+
+// Auto-run database migrations on startup
+async function runMigrations() {
+  console.log('🔄 Running database migrations...');
+  try {
+    // Create booking_requests table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS booking_requests (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255) NOT NULL,
+        team_members INTEGER[] NOT NULL,
+        custom_message TEXT,
+        unique_token VARCHAR(255) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        guest_calendar_connected BOOLEAN DEFAULT FALSE,
+        booked_slot_start TIMESTAMP,
+        booked_slot_end TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ booking_requests table created');
+
+    // Create indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
+    console.log('✅ Indexes created');
+    
+    // Create team_members table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50) DEFAULT 'member',
+        is_owner BOOLEAN DEFAULT FALSE,
+        added_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(team_id, user_id)
+      )
+    `);
+    console.log('✅ team_members table created');
+
+    // Create team_members indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`);
+    console.log('✅ team_members indexes created');
+    
+    // Add existing team owners to team_members
+    await pool.query(`
+      INSERT INTO team_members (team_id, user_id, role, is_owner)
+      SELECT id, owner_id, 'owner', TRUE
+      FROM teams
+      ON CONFLICT (team_id, user_id) DO NOTHING
+    `);
+    console.log('✅ Team owners added to team_members');
+    
+    console.log('🎉 All migrations completed successfully!');
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+  }
+}
+
+// Run migrations
+runMigrations();
+
+
+/* ============================================================================
+   STEP 2: ADD THESE ENDPOINTS AFTER YOUR EXISTING BOOKING ENDPOINTS
+   
+   Find this section in your server.js (around line 1700):
+   
+   // Smart booking endpoints
+   app.post('/api/booking/find-slots', async (req, res) => { ... });
+   app.post('/api/booking/create', async (req, res) => { ... });
+   
+   ADD THE CODE BELOW RIGHT AFTER THOSE:
+   ========================================================================== */
+
+/* ============================================================================
+   BOOKING REQUEST API ENDPOINTS - PHASE 1
+   ========================================================================== */
+
+// Create booking request and send emails
+app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { team_id, team_members, recipients, custom_message } = req.body;
+
+    // Validation
+    if (!team_id || !team_members || !recipients || recipients.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify team ownership
+    const teamCheck = await pool.query(
+      'SELECT * FROM teams WHERE id = $1 AND owner_id = $2',
+      [team_id, userId]
+    );
+
+    if (teamCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Not authorized to create requests for this team' });
+    }
+
+    const team = teamCheck.rows[0];
+
+    // Get user info
+    const userResult = await pool.query(
+      'SELECT display_name, email FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = userResult.rows[0];
+
+    // Create booking requests for each recipient
+    const requests = [];
+
+    for (const recipient of recipients) {
+      // Generate unique token
+      const uniqueToken = require('crypto').randomBytes(32).toString('hex');
+
+      // Insert booking request
+      const result = await pool.query(
+        `INSERT INTO booking_requests (
+          team_id, 
+          created_by, 
+          recipient_email, 
+          recipient_name, 
+          team_members, 
+          custom_message,
+          unique_token, 
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [
+          team_id,
+          userId,
+          recipient.email,
+          recipient.name,
+          team_members,
+          custom_message || '',
+          uniqueToken,
+          'pending'
+        ]
+      );
+
+      requests.push(result.rows[0]);
+
+      // Create booking link
+      const bookingLink = `${process.env.APP_URL}/booking-request/${uniqueToken}`;
+      
+      // Get team member names
+      const memberNames = [];
+      for (const memberId of team_members) {
+        const memberResult = await pool.query(
+          'SELECT display_name, email FROM users WHERE id = $1',
+          [memberId]
+        );
+        if (memberResult.rows.length > 0) {
+          memberNames.push(memberResult.rows[0].display_name || memberResult.rows[0].email);
+        }
+      }
+
+      // Email HTML template
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              line-height: 1.6; 
+              color: #333; 
+              margin: 0;
+              padding: 0;
+            }
+            .container { 
+              max-width: 600px; 
+              margin: 0 auto; 
+              padding: 20px; 
+            }
+            .header { 
+              background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); 
+              color: white; 
+              padding: 30px; 
+              border-radius: 12px 12px 0 0; 
+              text-align: center; 
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 28px;
+            }
+            .content { 
+              background: white; 
+              padding: 30px; 
+              border: 1px solid #e2e8f0; 
+              border-top: none; 
+              border-radius: 0 0 12px 12px;
+            }
+            .button { 
+              display: inline-block; 
+              padding: 14px 32px; 
+              background: #7c3aed; 
+              color: white !important; 
+              text-decoration: none; 
+              border-radius: 8px; 
+              font-weight: 600; 
+              margin: 20px 0; 
+            }
+            .team-members { 
+              background: #f8fafc; 
+              padding: 16px; 
+              border-radius: 8px; 
+              margin: 16px 0; 
+            }
+            .member { 
+              padding: 4px 0; 
+              color: #475569; 
+            }
+            .custom-message {
+              background: #f1f5f9;
+              padding: 16px;
+              border-radius: 8px;
+              font-style: italic;
+              margin: 16px 0;
+              border-left: 3px solid #7c3aed;
+            }
+            .features {
+              color: #64748b;
+              font-size: 14px;
+              margin-top: 20px;
+            }
+            .features div {
+              padding: 4px 0;
+            }
+            .footer {
+              text-align: center;
+              color: #94a3b8;
+              font-size: 14px;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e2e8f0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📅 Meeting Request</h1>
+            </div>
+            <div class="content">
+              <h2>Hi ${recipient.name}!</h2>
+              
+              <p><strong>${user.display_name || user.email}</strong> from <strong>${team.name}</strong> would like to schedule a meeting with you.</p>
+              
+              ${custom_message ? `<div class="custom-message">"${custom_message}"</div>` : ''}
+              
+              <div class="team-members">
+                <strong>📋 Meeting Attendees:</strong>
+                ${memberNames.map(name => `<div class="member">• ${name}</div>`).join('')}
+              </div>
+              
+              <p>To find the perfect time that works for everyone, click the button below:</p>
+              
+              <div style="text-align: center;">
+                <a href="${bookingLink}" class="button">
+                  📅 Connect Calendar & Book Meeting
+                </a>
+              </div>
+              
+              <div class="features">
+                <p><strong>Our smart assistant will:</strong></p>
+                <div>✓ Connect your calendar</div>
+                <div>✓ Analyze everyone's availability</div>
+                <div>✓ Find the perfect mutual time</div>
+                <div>✓ Automatically book the meeting</div>
+              </div>
+              
+              <div class="footer">
+                <p>Powered by ScheduleSync</p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Send email
+      if (emailService) {
+        try {
+          await emailService.sendEmail({
+            to: recipient.email,
+            subject: `Meeting Request from ${user.display_name || user.email}`,
+            html: emailHtml
+          });
+          console.log(`✅ Booking request email sent to ${recipient.email}`);
+        } catch (emailError) {
+          console.error('Error sending email to', recipient.email, ':', emailError);
+        }
+      } else {
+        console.log('⚠️ Email service not configured - request created but email not sent');
+      }
+    }
+
+    res.json({
+      success: true,
+      requests_created: requests.length,
+      requests: requests
+    });
+
+  } catch (error) {
+    console.error('Error creating booking request:', error);
+    res.status(500).json({ error: 'Failed to create booking request' });
+  }
+});
+
+// Get team members endpoint
+app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.teamId;
+    const userId = req.userId;
+
+    // Verify access to team
+    const teamCheck = await pool.query(
+      'SELECT * FROM teams WHERE id = $1 AND owner_id = $2',
+      [teamId, userId]
+    );
+
+    if (teamCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Not authorized to access this team' });
+    }
+
+    // Try to get team members from team_members table
+    const membersResult = await pool.query(
+      `SELECT u.id as user_id, u.email, u.display_name, tm.role, tm.is_owner
+       FROM team_members tm
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.team_id = $1
+       ORDER BY tm.is_owner DESC, u.display_name ASC`,
+      [teamId]
+    );
+
+    // If no team members found in junction table, just return the owner
+    if (membersResult.rows.length === 0) {
+      const ownerResult = await pool.query(
+        `SELECT u.id as user_id, u.email, u.display_name
+         FROM users u
+         JOIN teams t ON t.owner_id = u.id
+         WHERE t.id = $1`,
+        [teamId]
+      );
+      
+      return res.json({
+        members: ownerResult.rows.map(row => ({
+          ...row,
+          is_owner: true,
+          role: 'owner'
+        }))
+      });
+    }
+
+    res.json({ members: membersResult.rows });
+
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ error: 'Failed to fetch team members' });
+  }
+});
+
+
+/* ============================================================================
+   END OF ADDITIONS
+   
+   That's it! These are the only two sections you need to add to server.js
+   ========================================================================== */
+
+
+
+// ... rest of server.js ...
 
 /* ----------------------- Availability Management ----------------------- */
 
