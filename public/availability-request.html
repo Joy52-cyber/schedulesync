@@ -15,24 +15,24 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf3 100%);
             min-height: 100vh;
-            padding: 40px 20px;
+            padding: 24px 16px;
         }
 
         .container {
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 48px;
+            margin-bottom: 24px;
         }
 
         .header h1 {
-            font-size: 48px;
+            font-size: 32px;
             font-weight: 700;
             color: #7c3aed;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -40,31 +40,31 @@
         }
 
         .header .subtitle {
-            font-size: 20px;
+            font-size: 15px;
             color: #64748b;
         }
 
         .card {
             background: white;
-            border-radius: 24px;
-            padding: 48px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
         }
 
         /* Tabs Navigation */
         .tabs {
             display: flex;
             gap: 0;
-            margin-bottom: 40px;
+            margin-bottom: 24px;
             border-bottom: 2px solid #e2e8f0;
         }
 
         .tab {
             flex: 1;
-            padding: 16px 24px;
+            padding: 12px 16px;
             background: transparent;
             border: none;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: #94a3b8;
             cursor: pointer;
@@ -73,7 +73,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .tab.active {
@@ -91,7 +91,7 @@
         }
 
         .tab-icon {
-            font-size: 20px;
+            font-size: 16px;
         }
 
         /* Section Styles */
@@ -116,85 +116,86 @@
         }
 
         .section-title {
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 700;
             color: #1e293b;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-align: center;
         }
 
         .section-subtitle {
-            font-size: 16px;
+            font-size: 14px;
             color: #64748b;
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 20px;
         }
 
         /* Info Banner */
         .info-banner {
             background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            border-left: 4px solid #7c3aed;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 32px;
+            border-left: 3px solid #7c3aed;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
         }
 
         .info-banner p {
             color: #475569;
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
         /* Day Cards Grid */
         .days-grid {
             display: grid;
-            gap: 16px;
-            margin-bottom: 32px;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
         .day-card {
             background: #faf5ff;
             border: 2px solid #e9d5ff;
-            border-radius: 16px;
-            padding: 20px 24px;
-            transition: all 0.3s ease;
+            border-radius: 12px;
+            padding: 14px 16px;
+            transition: all 0.2s ease;
             cursor: pointer;
         }
 
         .day-card:hover {
-            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
         }
 
         .day-card.active {
             background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
             border-color: #7c3aed;
-            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.2);
         }
 
         .day-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .day-name {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 600;
             color: #1e293b;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .day-emoji {
-            font-size: 22px;
+            font-size: 18px;
         }
 
         /* Toggle Switch */
         .toggle-switch {
             position: relative;
-            width: 56px;
-            height: 32px;
+            width: 48px;
+            height: 26px;
         }
 
         .toggle-switch input {
@@ -218,14 +219,14 @@
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 24px;
-            width: 24px;
-            left: 4px;
-            bottom: 4px;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
             background: white;
             border-radius: 50%;
             transition: 0.3s;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
 
         input:checked + .toggle-slider {
@@ -233,14 +234,14 @@
         }
 
         input:checked + .toggle-slider:before {
-            transform: translateX(24px);
+            transform: translateX(22px);
         }
 
         /* Time Inputs */
         .time-inputs {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
             opacity: 0;
             max-height: 0;
             overflow: hidden;
@@ -249,18 +250,18 @@
 
         .day-card.active .time-inputs {
             opacity: 1;
-            max-height: 100px;
-            margin-top: 16px;
+            max-height: 80px;
+            margin-top: 12px;
         }
 
         .time-group {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
         }
 
         .time-label {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
             color: #64748b;
             text-transform: uppercase;
@@ -268,10 +269,10 @@
         }
 
         .time-input {
-            padding: 12px 16px;
+            padding: 8px 12px;
             border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 15px;
+            border-radius: 8px;
+            font-size: 14px;
             background: white;
             transition: all 0.2s;
         }
@@ -285,22 +286,22 @@
         /* Continue Button */
         .continue-btn {
             width: 100%;
-            padding: 16px 32px;
+            padding: 12px 24px;
             background: #7c3aed;
             color: white;
             border: none;
-            border-radius: 14px;
-            font-size: 17px;
+            border-radius: 10px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            margin-top: 24px;
+            margin-top: 20px;
         }
 
         .continue-btn:hover {
             background: #6d28d9;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
         }
 
         .continue-btn:disabled {
@@ -309,26 +310,26 @@
             transform: none;
         }
 
-        /* Success Message */
+        /* Success Section */
         .success-section {
             text-align: center;
-            padding: 40px 20px;
+            padding: 32px 16px;
         }
 
         .success-icon {
-            font-size: 80px;
-            margin-bottom: 24px;
-        }
-
-        .success-title {
-            font-size: 32px;
-            font-weight: 700;
-            color: #10b981;
+            font-size: 64px;
             margin-bottom: 16px;
         }
 
+        .success-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 12px;
+        }
+
         .success-text {
-            font-size: 18px;
+            font-size: 15px;
             color: #64748b;
             line-height: 1.6;
         }
@@ -336,32 +337,33 @@
         .overlap-box {
             background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
             border: 2px solid #10b981;
-            border-radius: 16px;
-            padding: 24px;
-            margin-top: 24px;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
         }
 
         .overlap-count {
-            font-size: 48px;
+            font-size: 40px;
             font-weight: 700;
             color: #10b981;
         }
 
         .overlap-label {
-            font-size: 16px;
+            font-size: 14px;
             color: #047857;
-            margin-top: 8px;
+            margin-top: 4px;
         }
 
         /* Error Message */
         .error-message {
             background: #fef2f2;
-            border-left: 4px solid #ef4444;
+            border-left: 3px solid #ef4444;
             color: #991b1b;
-            padding: 16px 20px;
-            border-radius: 12px;
-            margin-top: 20px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 16px;
             display: none;
+            font-size: 14px;
         }
 
         .error-message.show {
@@ -371,13 +373,13 @@
         /* Loading */
         .loading {
             display: inline-block;
-            width: 18px;
-            height: 18px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s linear infinite;
-            margin-left: 8px;
+            margin-left: 6px;
         }
 
         @keyframes spin {
@@ -387,11 +389,11 @@
         /* Responsive */
         @media (max-width: 768px) {
             .header h1 {
-                font-size: 36px;
+                font-size: 28px;
             }
 
             .card {
-                padding: 32px 24px;
+                padding: 20px 16px;
             }
 
             .time-inputs {
@@ -399,8 +401,8 @@
             }
 
             .tab {
-                font-size: 14px;
-                padding: 12px 16px;
+                font-size: 13px;
+                padding: 10px 12px;
             }
         }
     </style>
@@ -431,11 +433,11 @@
                 <p class="section-subtitle">Toggle the days and set your preferred times</p>
 
                 <div class="info-banner">
-                    <p>💡 <strong>Tip:</strong> Select all days when you're generally available. We'll automatically find times that work for both schedules!</p>
+                    <p>💡 Select all days when you're generally available. We'll find matching times!</p>
                 </div>
 
                 <div class="days-grid">
-                    <!-- Monday -->
+                    <!-- Days will be rendered here with compact spacing -->
                     <div class="day-card" data-day="1">
                         <div class="day-header">
                             <div class="day-name">
@@ -459,7 +461,6 @@
                         </div>
                     </div>
 
-                    <!-- Tuesday -->
                     <div class="day-card" data-day="2">
                         <div class="day-header">
                             <div class="day-name">
@@ -483,7 +484,6 @@
                         </div>
                     </div>
 
-                    <!-- Wednesday -->
                     <div class="day-card" data-day="3">
                         <div class="day-header">
                             <div class="day-name">
@@ -507,7 +507,6 @@
                         </div>
                     </div>
 
-                    <!-- Thursday -->
                     <div class="day-card" data-day="4">
                         <div class="day-header">
                             <div class="day-name">
@@ -531,7 +530,6 @@
                         </div>
                     </div>
 
-                    <!-- Friday -->
                     <div class="day-card" data-day="5">
                         <div class="day-header">
                             <div class="day-name">
@@ -555,7 +553,6 @@
                         </div>
                     </div>
 
-                    <!-- Saturday -->
                     <div class="day-card" data-day="6">
                         <div class="day-header">
                             <div class="day-name">
@@ -579,7 +576,6 @@
                         </div>
                     </div>
 
-                    <!-- Sunday -->
                     <div class="day-card" data-day="7">
                         <div class="day-header">
                             <div class="day-name">
@@ -614,14 +610,14 @@
                 <div class="success-section">
                     <div class="success-icon">🎉</div>
                     <h2 class="success-title">Availability Submitted!</h2>
-                    <p class="success-text">Thank you for sharing your availability. We found matching time slots between your schedule and the organizer's.</p>
+                    <p class="success-text">Thank you for sharing your availability. We found matching time slots!</p>
                     
                     <div class="overlap-box">
                         <div class="overlap-count" id="overlapCount">0</div>
                         <div class="overlap-label">matching time slots found</div>
                     </div>
 
-                    <p class="success-text" style="margin-top: 24px;">The organizer will book a time soon and you'll receive a confirmation email.</p>
+                    <p class="success-text" style="margin-top: 20px;">The organizer will book a time soon and you'll receive a confirmation email.</p>
                 </div>
             </div>
         </div>
@@ -698,8 +694,6 @@
 
                 if (response.ok) {
                     document.getElementById('overlapCount').textContent = data.overlap?.length || 0;
-                    
-                    // Switch to confirmation tab
                     document.querySelectorAll('.tab')[1].click();
                 } else {
                     throw new Error(data.error || 'Failed to submit');
