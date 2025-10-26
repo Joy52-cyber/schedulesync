@@ -685,7 +685,9 @@
         // Save availability
         document.getElementById('saveBtn').addEventListener('click', async () => {
             if (!selectedTeamId) {
-                alert('Please select a team first');
+                if (confirm('Please select a team first. Would you like to go to Team Management?')) {
+                    window.location.href = '/team-management.html';
+                }
                 return;
             }
 
@@ -743,7 +745,16 @@
         });
 
         // Load availability on page load
-        loadAvailability();
+        if (!selectedTeamId) {
+            // Show alert and redirect to team management
+            if (confirm('Please select a team first. Would you like to go to Team Management to select or create a team?')) {
+                window.location.href = '/team-management.html';
+            } else {
+                window.location.href = '/dashboard.html';
+            }
+        } else {
+            loadAvailability();
+        }
     </script>
 </body>
 </html>
