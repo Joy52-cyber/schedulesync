@@ -2046,9 +2046,16 @@ app.get('/api/booking-request/:token', async (req, res) => {
 
 // Connect guest calendar (Google OAuth)
 // Serve booking request guest page with token in path
+// Serve booking request guest page with token in path
 app.get('/booking-request/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'booking-request-guest.html'));
 });
+
+// Connect guest calendar (Google OAuth) - API endpoint
+app.get('/api/booking-request/:token/connect-google', async (req, res) => {
+  try {
+    const { token } = req.params;
+
     // Verify token exists
     const result = await pool.query(
       'SELECT id FROM booking_requests WHERE unique_token = $1',
