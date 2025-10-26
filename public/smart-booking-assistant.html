@@ -1,0 +1,864 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Booking Assistant - ScheduleSync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf3 100%);
+            min-height: 100vh;
+            padding: 24px 16px;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #7c3aed;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header .subtitle {
+            font-size: 15px;
+            color: #64748b;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+            margin-bottom: 20px;
+        }
+
+        /* Steps Progress */
+        .steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            position: relative;
+        }
+
+        .steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e2e8f0;
+            z-index: 0;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-circle {
+            background: #7c3aed;
+            color: white;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+
+        .step.completed .step-circle {
+            background: #10b981;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .step.active .step-label {
+            color: #7c3aed;
+        }
+
+        /* Section */
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 12px;
+        }
+
+        .section-subtitle {
+            font-size: 15px;
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+
+        /* Form Input */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        /* Loading State */
+        .loading-state {
+            text-align: center;
+            padding: 48px 24px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #7c3aed;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #64748b;
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .loading-subtext {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        /* Suggestion Card */
+        .suggestion-card {
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+            border: 2px solid #7c3aed;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .suggestion-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .suggestion-icon {
+            font-size: 32px;
+        }
+
+        .suggestion-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .time-display {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .time-date {
+            font-size: 16px;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+
+        .time-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #7c3aed;
+            margin-bottom: 8px;
+        }
+
+        .time-details {
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        /* Alternative Slots */
+        .alternatives {
+            margin-top: 20px;
+        }
+
+        .alternatives-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+        }
+
+        .alt-slots {
+            display: grid;
+            gap: 8px;
+        }
+
+        .alt-slot {
+            padding: 12px 16px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alt-slot:hover {
+            border-color: #7c3aed;
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
+        }
+
+        .alt-slot.selected {
+            border-color: #7c3aed;
+            background: #faf5ff;
+        }
+
+        .alt-slot-time {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .alt-slot-date {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #7c3aed;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #64748b;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            border-color: #7c3aed;
+            color: #7c3aed;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Success */
+        .success-card {
+            text-align: center;
+            padding: 48px 24px;
+        }
+
+        .success-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .success-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 12px;
+        }
+
+        .success-text {
+            font-size: 15px;
+            color: #64748b;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .booking-details {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 24px;
+            text-align: left;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #86efac;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-size: 14px;
+            color: #047857;
+            font-weight: 600;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #065f46;
+        }
+
+        /* Error */
+        .error-message {
+            background: #fef2f2;
+            border-left: 3px solid #ef4444;
+            color: #991b1b;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .card {
+                padding: 24px 20px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .steps {
+                font-size: 11px;
+            }
+
+            .step-circle {
+                width: 36px;
+                height: 36px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Smart Booking Assistant</h1>
+            <p class="subtitle">Find the perfect time in seconds</p>
+        </div>
+
+        <div class="card">
+            <!-- Progress Steps -->
+            <div class="steps">
+                <div class="step active" data-step="1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Your Link</div>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Find Time</div>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Confirm</div>
+                </div>
+                <div class="step" data-step="4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Booked!</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Enter Link -->
+            <div class="section active" id="step1">
+                <h2 class="section-title">📎 Paste Your Booking Link</h2>
+                <p class="section-subtitle">Enter the scheduling link you received</p>
+
+                <div class="form-group">
+                    <label class="form-label">Booking Link</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="bookingLink" 
+                        placeholder="https://schedulesync.com/book/abc123"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Your Name</label>
+                    <input 
+                        type="text" 
+                        class="form-input" 
+                        id="guestName" 
+                        placeholder="John Doe"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Your Email</label>
+                    <input 
+                        type="email" 
+                        class="form-input" 
+                        id="guestEmail" 
+                        placeholder="john@example.com"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea 
+                        class="form-input form-textarea" 
+                        id="guestNotes" 
+                        placeholder="What would you like to discuss?"
+                    ></textarea>
+                </div>
+
+                <div class="error-message" id="error1"></div>
+
+                <button class="btn btn-primary" onclick="findTime()" style="width: 100%;">
+                    🔍 Find Best Time
+                </button>
+            </div>
+
+            <!-- Step 2: Finding Time (Loading) -->
+            <div class="section" id="step2">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <div class="loading-text">🤖 Analyzing calendars...</div>
+                    <div class="loading-subtext">Finding the perfect time for both of you</div>
+                </div>
+            </div>
+
+            <!-- Step 3: Suggestion & Confirmation -->
+            <div class="section" id="step3">
+                <h2 class="section-title">✨ We Found the Perfect Time!</h2>
+                <p class="section-subtitle">Here's the closest available slot for both of you</p>
+
+                <div class="suggestion-card">
+                    <div class="suggestion-header">
+                        <div class="suggestion-icon">🎯</div>
+                        <div class="suggestion-title">Recommended Time</div>
+                    </div>
+
+                    <div class="time-display">
+                        <div class="time-date" id="suggestedDate">Loading...</div>
+                        <div class="time-value" id="suggestedTime">Loading...</div>
+                        <div class="time-details" id="suggestedDetails">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="alternatives">
+                    <div class="alternatives-title">Or choose an alternative:</div>
+                    <div class="alt-slots" id="alternativeSlots">
+                        <!-- Alternative slots will be populated here -->
+                    </div>
+                </div>
+
+                <div class="error-message" id="error3"></div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="goBack()">
+                        ← Back
+                    </button>
+                    <button class="btn btn-primary" onclick="confirmBooking()">
+                        ✅ Confirm Booking
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Success -->
+            <div class="section" id="step4">
+                <div class="success-card">
+                    <div class="success-icon">🎉</div>
+                    <h2 class="success-title">Meeting Booked!</h2>
+                    <p class="success-text">
+                        Calendar invites have been sent to both participants. 
+                        You'll receive a confirmation email shortly.
+                    </p>
+
+                    <div class="booking-details">
+                        <div class="detail-row">
+                            <span class="detail-label">📅 Date & Time</span>
+                            <span class="detail-value" id="finalDateTime">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">👤 With</span>
+                            <span class="detail-value" id="finalHost">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">📧 Your Email</span>
+                            <span class="detail-value" id="finalEmail">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">🆔 Booking ID</span>
+                            <span class="detail-value" id="finalBookingId">-</span>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%; margin-top: 24px;">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedSlot = null;
+        let availableSlots = [];
+        let bookingData = {};
+
+        // Step navigation
+        function goToStep(stepNum) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.step').forEach(s => {
+                s.classList.remove('active', 'completed');
+                const stepNumber = parseInt(s.dataset.step);
+                if (stepNumber < stepNum) s.classList.add('completed');
+                if (stepNumber === stepNum) s.classList.add('active');
+            });
+            document.getElementById(`step${stepNum}`).classList.add('active');
+        }
+
+        function goBack() {
+            goToStep(1);
+        }
+
+        // Step 1: Find Time
+        async function findTime() {
+            const link = document.getElementById('bookingLink').value.trim();
+            const name = document.getElementById('guestName').value.trim();
+            const email = document.getElementById('guestEmail').value.trim();
+            const notes = document.getElementById('guestNotes').value.trim();
+            const error1 = document.getElementById('error1');
+
+            error1.classList.remove('show');
+
+            // Validation
+            if (!link) {
+                error1.textContent = '❌ Please enter a booking link';
+                error1.classList.add('show');
+                return;
+            }
+
+            if (!name || !email) {
+                error1.textContent = '❌ Please enter your name and email';
+                error1.classList.add('show');
+                return;
+            }
+
+            if (!email.includes('@')) {
+                error1.textContent = '❌ Please enter a valid email';
+                error1.classList.add('show');
+                return;
+            }
+
+            // Store data
+            bookingData = { link, name, email, notes };
+
+            // Extract team_id from link
+            const teamId = extractTeamId(link);
+            if (!teamId) {
+                error1.textContent = '❌ Invalid booking link format';
+                error1.classList.add('show');
+                return;
+            }
+
+            // Go to loading
+            goToStep(2);
+
+            try {
+                // Call API to find common slots
+                const response = await fetch(`/api/booking/find-slots`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        team_id: teamId,
+                        guest_email: email
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to find available slots');
+                }
+
+                if (!data.slots || data.slots.length === 0) {
+                    throw new Error('No available time slots found');
+                }
+
+                availableSlots = data.slots;
+                selectedSlot = data.slots[0]; // Default to first slot
+
+                // Display suggestions
+                displaySuggestions(data.slots);
+                goToStep(3);
+
+            } catch (error) {
+                console.error('Error:', error);
+                goToStep(1);
+                error1.textContent = '❌ ' + error.message;
+                error1.classList.add('show');
+            }
+        }
+
+        // Display suggested times
+        function displaySuggestions(slots) {
+            const recommended = slots[0];
+            
+            // Format the recommended time
+            const date = new Date(recommended.start);
+            const dateStr = date.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                month: 'long', 
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const timeStr = date.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            const endDate = new Date(recommended.end);
+            const endTimeStr = endDate.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+
+            document.getElementById('suggestedDate').textContent = dateStr;
+            document.getElementById('suggestedTime').textContent = timeStr;
+            document.getElementById('suggestedDetails').textContent = `${timeStr} - ${endTimeStr} (${recommended.duration || 60} min)`;
+
+            // Show alternatives
+            const altContainer = document.getElementById('alternativeSlots');
+            altContainer.innerHTML = '';
+
+            slots.slice(1, 4).forEach((slot, index) => {
+                const slotDate = new Date(slot.start);
+                const slotDateStr = slotDate.toLocaleDateString('en-US', { 
+                    weekday: 'short',
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                const slotTimeStr = slotDate.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit',
+                    hour12: true 
+                });
+
+                const altDiv = document.createElement('div');
+                altDiv.className = 'alt-slot';
+                altDiv.innerHTML = `
+                    <div>
+                        <div class="alt-slot-time">${slotTimeStr}</div>
+                        <div class="alt-slot-date">${slotDateStr}</div>
+                    </div>
+                    <div style="color: #7c3aed; font-size: 18px;">→</div>
+                `;
+                altDiv.onclick = () => {
+                    document.querySelectorAll('.alt-slot').forEach(s => s.classList.remove('selected'));
+                    altDiv.classList.add('selected');
+                    selectedSlot = slot;
+                    
+                    // Update main display
+                    document.getElementById('suggestedDate').textContent = slotDate.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        month: 'long', 
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                    document.getElementById('suggestedTime').textContent = slotTimeStr;
+                    const endDate = new Date(slot.end);
+                    document.getElementById('suggestedDetails').textContent = 
+                        `${slotTimeStr} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} (${slot.duration || 60} min)`;
+                };
+
+                altContainer.appendChild(altDiv);
+            });
+        }
+
+        // Step 3: Confirm Booking
+        async function confirmBooking() {
+            if (!selectedSlot) return;
+
+            const teamId = extractTeamId(bookingData.link);
+            
+            goToStep(2); // Show loading
+
+            try {
+                const response = await fetch(`/api/booking/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        team_id: teamId,
+                        slot: selectedSlot,
+                        guest_name: bookingData.name,
+                        guest_email: bookingData.email,
+                        guest_notes: bookingData.notes
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create booking');
+                }
+
+                // Show success
+                displaySuccess(data);
+                goToStep(4);
+
+            } catch (error) {
+                console.error('Error:', error);
+                goToStep(3);
+                const error3 = document.getElementById('error3');
+                error3.textContent = '❌ ' + error.message;
+                error3.classList.add('show');
+            }
+        }
+
+        // Display success
+        function displaySuccess(booking) {
+            const date = new Date(selectedSlot.start);
+            const dateTimeStr = date.toLocaleDateString('en-US', { 
+                weekday: 'long',
+                month: 'long', 
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+
+            document.getElementById('finalDateTime').textContent = dateTimeStr;
+            document.getElementById('finalHost').textContent = booking.host_name || 'Team Member';
+            document.getElementById('finalEmail').textContent = bookingData.email;
+            document.getElementById('finalBookingId').textContent = booking.id || 'N/A';
+        }
+
+        // Extract team ID from link
+        function extractTeamId(link) {
+            // Support multiple formats:
+            // /book/123, /book/teamname, schedulesync.com/book/123
+            const match = link.match(/\/book\/([^\/\?#]+)/);
+            return match ? match[1] : null;
+        }
+    </script>
+</body>
+</html>
