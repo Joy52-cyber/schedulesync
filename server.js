@@ -2492,6 +2492,29 @@ app.post('/api/booking-request/:token/book', async (req, res) => {
         </html>
       `;
 
+      // ── Build the guest booking link + email html ───────────────────────────────
+const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+
+// Ensure you have a unique token per request; reuse if you already generated one
+// e.g., const uniqueToken = crypto.randomBytes(16).toString('hex'); // (if not yet defined)
+
+const bookingLink = `${baseUrl}/booking.html?token=${uniqueToken}`;
+
+// If you already have emailHtml earlier, keep that; otherwise define it here:
+const emailHtml = `
+  <div style="font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif;">
+    <h2>You're invited to book a meeting</h2>
+    <p>${user.display_name || user.name || user.email} would like to meet with you.</p>
+    <p><a href="${bookingLink}" target="_blank" rel="noopener">Pick a time</a></p>
+    <p style="margin-top:12px;">Or copy this link:<br>
+      <code>${bookingLink}</code>
+    </p>
+  </div>
+`;
+
+console.log('🔗 Booking link for', recipient.email, '→', bookingLink);
+
+
       // Send email
       if (emailService) {
         try {
