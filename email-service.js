@@ -77,6 +77,31 @@ async function sendPasswordReset(to, userName, resetLink) {
     return false;
   }
 }
+// Generic email sending function
+async function sendEmail({ to, subject, html }) {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: process.env.SMTP_PORT == 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject,
+      html
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send email:', error);
+    throw error;
+  }
+}
 
 // Send password changed confirmation
 async function sendPasswordChanged(to, userName) {
@@ -366,6 +391,7 @@ async function sendAvailabilitySubmitted(ownerEmail, ownerName, guestName, overl
 }
 
 module.exports = {
+sendEmail,
   sendPasswordReset,
   sendPasswordChanged,
   sendBookingConfirmation,
