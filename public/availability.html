@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Availability - ScheduleSync</title>
+    <title>Set Your Availability - ScheduleSync</title>
     <style>
         * {
             margin: 0;
@@ -13,9 +13,9 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf3 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
         .container {
@@ -25,128 +25,130 @@
 
         .header {
             text-align: center;
-            color: white;
-            margin-bottom: 40px;
+            margin-bottom: 48px;
         }
 
         .header h1 {
-            font-size: 42px;
-            margin-bottom: 12px;
+            font-size: 48px;
             font-weight: 700;
+            color: #7c3aed;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        .header p {
-            font-size: 18px;
-            opacity: 0.9;
+        .header .subtitle {
+            font-size: 20px;
+            color: #64748b;
         }
 
         .card {
             background: white;
             border-radius: 24px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
         }
 
+        /* Quick Actions */
         .quick-actions {
-            display: flex;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
             margin-bottom: 32px;
-            flex-wrap: wrap;
         }
 
         .quick-btn {
-            padding: 10px 20px;
-            border: 2px solid #e2e8f0;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+            border: 2px solid #e9d5ff;
             border-radius: 12px;
-            background: white;
-            color: #334155;
+            font-size: 15px;
             font-weight: 600;
+            color: #7c3aed;
             cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
+            transition: all 0.3s;
+            text-align: center;
         }
 
         .quick-btn:hover {
-            border-color: #667eea;
-            color: #667eea;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: white;
+            border-color: #7c3aed;
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
         }
 
-        .time-slots {
+        /* Section Title */
+        .section-header {
             display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .time-slot {
-            display: grid;
-            grid-template-columns: 140px 1fr auto;
+            justify-content: space-between;
             align-items: center;
-            gap: 20px;
-            padding: 20px;
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 16px;
-            transition: all 0.3s;
+            margin-bottom: 24px;
         }
 
-        .time-slot.active {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-            border-color: #667eea;
-        }
-
-        .time-slot.inactive {
-            opacity: 0.5;
-        }
-
-        .day-label {
+        .section-title {
+            font-size: 24px;
             font-weight: 700;
             color: #1e293b;
-            font-size: 16px;
         }
 
-        .time-inputs {
-            display: flex;
-            align-items: center;
+        .save-status {
+            font-size: 14px;
+            color: #10b981;
+            font-weight: 500;
+        }
+
+        /* Days Grid */
+        .days-grid {
+            display: grid;
             gap: 16px;
         }
 
-        .time-input-wrapper {
-            flex: 1;
+        .day-card {
+            background: #faf5ff;
+            border: 2px solid #e9d5ff;
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .day-card:hover {
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+        }
+
+        .day-card.active {
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+            border-color: #7c3aed;
+            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+        }
+
+        .day-header {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
         }
 
-        .time-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .time-inputs input[type="time"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 16px;
+        .day-name {
+            font-size: 18px;
             font-weight: 600;
             color: #1e293b;
-            transition: all 0.3s;
-            background: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .time-inputs input[type="time"]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        .day-emoji {
+            font-size: 22px;
         }
 
+        /* Toggle Switch */
         .toggle-switch {
             position: relative;
-            width: 60px;
+            width: 56px;
             height: 32px;
         }
 
@@ -156,424 +158,587 @@
             height: 0;
         }
 
-        .slider {
+        .toggle-slider {
             position: absolute;
             cursor: pointer;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #cbd5e1;
+            background: #cbd5e1;
+            border-radius: 34px;
             transition: 0.3s;
-            border-radius: 32px;
         }
 
-        .slider:before {
+        .toggle-slider:before {
             position: absolute;
             content: "";
             height: 24px;
             width: 24px;
             left: 4px;
             bottom: 4px;
-            background-color: white;
-            transition: 0.3s;
+            background: white;
             border-radius: 50%;
+            transition: 0.3s;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        input:checked + .slider {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        input:checked + .toggle-slider {
+            background: #7c3aed;
         }
 
-        input:checked + .slider:before {
-            transform: translateX(28px);
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
         }
 
-        .actions {
-            margin-top: 32px;
+        /* Time Inputs */
+        .time-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .day-card.active .time-inputs {
+            opacity: 1;
+            max-height: 100px;
+            margin-top: 16px;
+        }
+
+        .time-group {
             display: flex;
-            gap: 12px;
-            justify-content: flex-end;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .btn {
-            padding: 14px 32px;
-            border: none;
+        .time-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .time-input {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
             border-radius: 12px;
+            font-size: 15px;
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .time-input:focus {
+            outline: none;
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+
+        /* Save Button */
+        .save-btn {
+            width: 100%;
+            padding: 16px 32px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            font-size: 16px;
+            margin-top: 24px;
         }
 
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #334155;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
+        .save-btn:hover {
+            background: #6d28d9;
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
         }
 
-        .btn-primary:disabled {
+        .save-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
 
+        /* Back Button */
         .back-btn {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            margin-bottom: 24px;
-            padding: 10px 20px;
+            padding: 12px 24px;
+            background: white;
+            color: #64748b;
+            border: 2px solid #e2e8f0;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            transition: all 0.2s;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            margin-bottom: 24px;
         }
 
         .back-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
+            border-color: #7c3aed;
+            color: #7c3aed;
             transform: translateX(-4px);
         }
 
-        .loading {
-            text-align: center;
-            padding: 60px 20px;
-            color: #64748b;
+        /* Success Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
         }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e2e8f0;
-            border-top-color: #667eea;
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-icon {
+            font-size: 24px;
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
+            border-top-color: white;
             animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
+            margin-left: 8px;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        .alert {
-            padding: 12px 20px;
+        /* Info Banner */
+        .info-banner {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 4px solid #7c3aed;
             border-radius: 12px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
+            padding: 20px;
+            margin-bottom: 24px;
         }
 
-        .alert.success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 2px solid #10b981;
+        .info-banner p {
+            color: #475569;
+            line-height: 1.6;
+            margin: 0;
         }
 
-        .alert.error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 2px solid #ef4444;
-        }
-
-        .alert.show {
-            display: block;
-        }
-
+        /* Responsive */
         @media (max-width: 768px) {
-            .time-slot {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-
-            .time-inputs {
-                flex-direction: column;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-            }
-
             .header h1 {
-                font-size: 32px;
+                font-size: 36px;
             }
 
             .card {
-                padding: 24px;
+                padding: 32px 24px;
+            }
+
+            .time-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
-    <script src="/auth-handler.js"></script>
-    
     <div class="container">
-        <a href="/dashboard" class="back-btn">
+        <a href="/dashboard.html" class="back-btn">
             ← Back to Dashboard
         </a>
 
         <div class="header">
-            <h1>⏰ Set Your Availability</h1>
-            <p>Define when you're available for meetings</p>
+            <h1>Set Your Availability</h1>
+            <p class="subtitle">Configure when you're available for meetings</p>
         </div>
 
         <div class="card">
-            <div id="alert" class="alert"></div>
-
-            <div class="quick-actions">
-                <button class="quick-btn" onclick="setWorkWeek()">📅 Work Week (Mon-Fri 9-5)</button>
-                <button class="quick-btn" onclick="setAllDays()">✅ Enable All Days</button>
-                <button class="quick-btn" onclick="clearAll()">❌ Clear All</button>
+            <div class="info-banner">
+                <p>💡 <strong>Quick Setup:</strong> Use the buttons below for common schedules, or customize each day individually.</p>
             </div>
 
-            <div id="content">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading your availability...</p>
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="setWeekdays()">
+                    📅 Weekdays (9-5)
+                </button>
+                <button class="quick-btn" onclick="setFullWeek()">
+                    🗓️ Full Week (9-5)
+                </button>
+                <button class="quick-btn" onclick="clearAll()">
+                    🗑️ Clear All
+                </button>
+            </div>
+
+            <div class="section-header">
+                <h2 class="section-title">Weekly Availability</h2>
+                <span class="save-status" id="saveStatus"></span>
+            </div>
+
+            <!-- Days Grid -->
+            <div class="days-grid" id="daysGrid">
+                <!-- Monday -->
+                <div class="day-card" data-day="1">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">🌙</span>
+                            <span>Monday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tuesday -->
+                <div class="day-card" data-day="2">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">🔥</span>
+                            <span>Tuesday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wednesday -->
+                <div class="day-card" data-day="3">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">🌸</span>
+                            <span>Wednesday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thursday -->
+                <div class="day-card" data-day="4">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">⚡</span>
+                            <span>Thursday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Friday -->
+                <div class="day-card" data-day="5">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">🎉</span>
+                            <span>Friday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Saturday -->
+                <div class="day-card" data-day="6">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">☀️</span>
+                            <span>Saturday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sunday -->
+                <div class="day-card" data-day="7">
+                    <div class="day-header">
+                        <div class="day-name">
+                            <span class="day-emoji">🌅</span>
+                            <span>Sunday</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="day-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="time-inputs">
+                        <div class="time-group">
+                            <label class="time-label">Start Time</label>
+                            <input type="time" class="time-input start-time" value="09:00">
+                        </div>
+                        <div class="time-group">
+                            <label class="time-label">End Time</label>
+                            <input type="time" class="time-input end-time" value="17:00">
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="actions" id="actions" style="display: none;">
-                <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">Cancel</button>
-                <button class="btn btn-primary" onclick="saveAvailability()">Save Availability</button>
-            </div>
+            <button class="save-btn" id="saveBtn">Save Availability</button>
         </div>
+    </div>
+
+    <!-- Success Toast -->
+    <div class="toast" id="toast">
+        <span class="toast-icon">✅</span>
+        <span>Availability saved successfully!</span>
     </div>
 
     <script>
         const token = localStorage.getItem('token');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        let selectedTeamId = null;
+
+        // Get team ID from URL or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        selectedTeamId = urlParams.get('team_id') || localStorage.getItem('selectedTeamId');
 
         if (!token) {
-            window.location.href = '/login';
+            window.location.href = '/login.html';
         }
 
-        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        const dayShortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        // Toggle functionality
+        document.querySelectorAll('.day-toggle').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const card = this.closest('.day-card');
+                if (this.checked) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+        });
 
-        // Load existing availability from backend
+        // Quick Actions
+        function setWeekdays() {
+            document.querySelectorAll('.day-card').forEach(card => {
+                const day = parseInt(card.dataset.day);
+                const toggle = card.querySelector('.day-toggle');
+                
+                if (day >= 1 && day <= 5) {
+                    toggle.checked = true;
+                    card.classList.add('active');
+                    card.querySelector('.start-time').value = '09:00';
+                    card.querySelector('.end-time').value = '17:00';
+                } else {
+                    toggle.checked = false;
+                    card.classList.remove('active');
+                }
+            });
+        }
+
+        function setFullWeek() {
+            document.querySelectorAll('.day-card').forEach(card => {
+                const toggle = card.querySelector('.day-toggle');
+                toggle.checked = true;
+                card.classList.add('active');
+                card.querySelector('.start-time').value = '09:00';
+                card.querySelector('.end-time').value = '17:00';
+            });
+        }
+
+        function clearAll() {
+            document.querySelectorAll('.day-card').forEach(card => {
+                const toggle = card.querySelector('.day-toggle');
+                toggle.checked = false;
+                card.classList.remove('active');
+            });
+        }
+
+        // Load existing availability
         async function loadAvailability() {
+            if (!selectedTeamId) {
+                console.warn('No team selected');
+                return;
+            }
+
             try {
-                console.log('📥 Loading availability from API...');
-                const response = await fetch('/api/availability', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const response = await fetch(`/api/teams/${selectedTeamId}/availability`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
 
-                let existingSlots = [];
                 if (response.ok) {
                     const data = await response.json();
-                    existingSlots = data.slots || [];
-                    console.log('✅ Loaded', existingSlots.length, 'slots from backend');
-                } else {
-                    console.error('❌ Failed to load availability:', response.status);
-                }
+                    
+                    // Clear all first
+                    clearAll();
 
-                renderAvailability(existingSlots);
+                    // Set availability for each day
+                    data.availability.forEach(slot => {
+                        const card = document.querySelector(`[data-day="${slot.day_of_week}"]`);
+                        if (card) {
+                            const toggle = card.querySelector('.day-toggle');
+                            toggle.checked = true;
+                            card.classList.add('active');
+                            
+                            card.querySelector('.start-time').value = slot.start_time.substring(0, 5);
+                            card.querySelector('.end-time').value = slot.end_time.substring(0, 5);
+                        }
+                    });
+                }
             } catch (error) {
-                console.error('💥 Error loading availability:', error);
-                showAlert('Failed to load availability', 'error');
-                renderAvailability([]);
+                console.error('Error loading availability:', error);
             }
         }
 
-        // Render availability UI with loaded data
-        function renderAvailability(existingSlots) {
-            console.log('🎨 Rendering availability with', existingSlots.length, 'saved slots');
-            let html = '<div class="time-slots">';
-
-            dayNames.forEach((dayName, index) => {
-                const dayShort = dayShortNames[index];
-                const dayOfWeek = index + 1; // 1=Monday, 7=Sunday
-
-                // Find if this day has saved availability
-                const existingSlot = existingSlots.find(s => s.day_of_week === dayOfWeek);
-                
-                // ✅ FIXED: Only enable if data exists in database
-                const startTime = existingSlot ? existingSlot.start_time : '09:00';
-                const endTime = existingSlot ? existingSlot.end_time : '17:00';
-                const isEnabled = !!existingSlot; // Only enable if slot exists
-
-                html += `
-                    <div class="time-slot ${isEnabled ? 'active' : 'inactive'}" id="slot-${dayShort}">
-                        <div class="day-label">${dayName}</div>
-                        <div class="time-inputs">
-                            <div class="time-input-wrapper">
-                                <div class="time-label">Start</div>
-                                <input type="time" id="${dayShort}-start" value="${startTime}">
-                            </div>
-                            <div class="time-input-wrapper">
-                                <div class="time-label">End</div>
-                                <input type="time" id="${dayShort}-end" value="${endTime}">
-                            </div>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="${dayShort}-enabled" ${isEnabled ? 'checked' : ''} onchange="toggleSlot('${dayShort}')">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                `;
-            });
-
-            html += '</div>';
-            document.getElementById('content').innerHTML = html;
-            document.getElementById('actions').style.display = 'flex';
-        }
-
-        // Toggle day enabled/disabled
-        function toggleSlot(day) {
-            const slot = document.getElementById(`slot-${day}`);
-            const checkbox = document.getElementById(`${day}-enabled`);
-            
-            if (checkbox.checked) {
-                slot.classList.remove('inactive');
-                slot.classList.add('active');
-            } else {
-                slot.classList.remove('active');
-                slot.classList.add('inactive');
+        // Save availability
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            if (!selectedTeamId) {
+                alert('Please select a team first');
+                return;
             }
-        }
 
-        // Quick action: Set work week (Mon-Fri 9-5)
-        function setWorkWeek() {
-            dayShortNames.forEach((day, index) => {
-                const checkbox = document.getElementById(`${day}-enabled`);
-                const startInput = document.getElementById(`${day}-start`);
-                const endInput = document.getElementById(`${day}-end`);
-                
-                if (index < 5) { // Mon-Fri
-                    checkbox.checked = true;
-                    startInput.value = '09:00';
-                    endInput.value = '17:00';
-                } else { // Sat-Sun
-                    checkbox.checked = false;
-                }
-                toggleSlot(day);
-            });
-        }
+            const saveBtn = document.getElementById('saveBtn');
+            const saveStatus = document.getElementById('saveStatus');
 
-        // Quick action: Enable all days
-        function setAllDays() {
-            dayShortNames.forEach((day) => {
-                const checkbox = document.getElementById(`${day}-enabled`);
-                checkbox.checked = true;
-                toggleSlot(day);
-            });
-        }
-
-        // Quick action: Clear all
-        function clearAll() {
-            dayShortNames.forEach((day) => {
-                const checkbox = document.getElementById(`${day}-enabled`);
-                checkbox.checked = false;
-                toggleSlot(day);
-            });
-        }
-
-        // Save availability to backend
-        async function saveAvailability() {
-            // Collect enabled slots
+            // Collect availability data
             const slots = [];
-            dayShortNames.forEach((day, index) => {
-                const enabled = document.getElementById(`${day}-enabled`).checked;
-                if (enabled) {
-                    const startTime = document.getElementById(`${day}-start`).value;
-                    const endTime = document.getElementById(`${day}-end`).value;
-                    
-                    // Validate times
-                    if (startTime >= endTime) {
-                        showAlert(`Invalid time range for ${dayNames[index]}. End time must be after start time.`, 'error');
-                        return;
-                    }
-                    
+            document.querySelectorAll('.day-card.active').forEach(card => {
+                const dayOfWeek = parseInt(card.dataset.day);
+                const startTime = card.querySelector('.start-time').value;
+                const endTime = card.querySelector('.end-time').value;
+
+                if (startTime && endTime) {
                     slots.push({
-                        day_of_week: index + 1,
-                        start_time: startTime,
-                        end_time: endTime
+                        day_of_week: dayOfWeek,
+                        start_time: startTime + ':00',
+                        end_time: endTime + ':00'
                     });
                 }
             });
 
-            // Validate at least one slot
-            if (slots.length === 0) {
-                showAlert('Please select at least one day with availability', 'error');
-                return;
-            }
-
-            console.log('💾 Saving', slots.length, 'slots to backend...');
-
-            // Disable button during save
-            const btn = document.querySelector('.btn-primary');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = 'Saving<span class="loading"></span>';
 
             try {
-                const response = await fetch('/api/availability', {
+                const response = await fetch(`/api/teams/${selectedTeamId}/availability`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ slots })
                 });
 
-                const data = await response.json();
-
                 if (response.ok) {
-                    console.log('✅ Availability saved successfully');
-                    btn.textContent = '✅ Saved!';
-                    showAlert('Availability saved successfully!', 'success');
-                    
-                    // Reload after short delay to show saved state
-                    setTimeout(() => {
-                        loadAvailability();
-                        btn.disabled = false;
-                        btn.textContent = originalText;
-                    }, 1500);
+                    // Show success toast
+                    const toast = document.getElementById('toast');
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 3000);
+
+                    saveStatus.textContent = '✓ Saved';
+                    setTimeout(() => saveStatus.textContent = '', 3000);
                 } else {
-                    console.error('❌ Save failed:', data);
-                    showAlert(data.error || 'Failed to save availability', 'error');
-                    btn.disabled = false;
-                    btn.textContent = originalText;
+                    const error = await response.json();
+                    alert('Error: ' + (error.error || 'Failed to save'));
                 }
             } catch (error) {
-                console.error('💥 Error saving availability:', error);
-                showAlert('Network error. Please try again.', 'error');
-                btn.disabled = false;
-                btn.textContent = originalText;
+                console.error('Error:', error);
+                alert('Error saving availability');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Availability';
             }
-        }
-
-        // Show alert message
-        function showAlert(message, type) {
-            const alert = document.getElementById('alert');
-            alert.textContent = message;
-            alert.className = `alert ${type} show`;
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                alert.classList.remove('show');
-            }, 5000);
-        }
+        });
 
         // Load availability on page load
         loadAvailability();
