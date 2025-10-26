@@ -1035,58 +1035,41 @@ app.get('/api/analytics/dashboard', authenticateToken, async (req, res) => {
    ========================================================================== */
 
 // Get all teams for current user
-app.get('/api/teams', authenticateToken, async (req, res) => {
+// REPLACE the /api/teams/:teamId/members endpoint in server.js with this:
+
+app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
   try {
+    const teamId = req.params.teamId;
     const userId = req.userId;
-    const result = await pool.query(
-      `SELECT t.*, COUNT(tm.id) as member_count
-       FROM teams t
-       LEFT JOIN team_members tm ON t.id = tm.team_id
-       WHERE t.owner_id = $1
-       GROUP BY t.id
-       ORDER BY t.created_at DESC`,
+
+    // Get the current user's info
+    const userResult = await pool.query(
+      'SELECT id, email, display_name FROM users WHERE id = $1',
       [userId]
     );
-    res.json({ teams: result.rows });
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // For Phase 1, just return the logged-in user as owner
+    return res.json({
+      members: [{
+        user_id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        is_owner: true,
+        role: 'owner'
+      }]
+    });
+
   } catch (error) {
-    console.error('Error fetching teams:', error);
-    res.status(500).json({ error: 'Failed to fetch teams' });
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ error: 'Failed to fetch team members' });
   }
 });
-
-// Get public team info (for booking page - must be BEFORE /api/teams/:id)
-app.get('/api/teams/:id/public', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Try to parse as integer, if it fails, it's a public_url string
-    const isNumeric = /^\d+$/.test(id);
-    
-    let result;
-    if (isNumeric) {
-      // Search by ID
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE id = $1',
-        [parseInt(id)]
-      );
-    } else {
-      // Search by public_url
-      result = await pool.query(
-        'SELECT id, name, description FROM teams WHERE public_url = $1',
-        [id]
-      );
-    }
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-    res.json({ team: result.rows[0] });
-  } catch (error) {
-    console.error('Error fetching public team:', error);
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
-
 // Get single team by ID
 app.get('/api/teams/:id', authenticateToken, async (req, res) => {
   try {
