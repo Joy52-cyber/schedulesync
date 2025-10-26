@@ -1037,54 +1037,50 @@ app.get('/api/analytics/dashboard', authenticateToken, async (req, res) => {
 // Get all teams for current user
 // REPLACE the /api/teams/:teamId/members endpoint in server.js with this:
 // Get all teams for current user
-app.get('/api/teams', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const result = await pool.query(
-      `SELECT t.*, 
-       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
-       FROM teams t
-       WHERE t.owner_id = $1
-       ORDER BY t.created_at DESC`,
-      [userId]
-    );
-    res.json({ teams: result.rows });
-  } catch (error) {
-    console.error('Error fetching teams:', error);
-    res.status(500).json({ error: 'Failed to fetch teams' });
-  }
-});
+// ULTRA-SIMPLE VERSION - Replace /api/teams/:teamId/members with this:
+
 app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
   try {
-    const teamId = req.params.teamId;
-    const userId = req.userId;
+    const userId = req.userId; // From authenticateToken middleware
+    
+    console.log('📋 Fetching members for user:', userId);
 
-    // Get the current user's info
-    const userResult = await pool.query(
+    // Get user info - simplest possible query
+    const result = await pool.query(
       'SELECT id, email, display_name FROM users WHERE id = $1',
       [userId]
     );
 
-    if (userResult.rows.length === 0) {
+    console.log('📋 Query result:', result.rows);
+
+    if (result.rows.length === 0) {
+      console.log('❌ User not found:', userId);
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const user = userResult.rows[0];
-
-    // For Phase 1, just return the logged-in user as owner
-    return res.json({
+    const user = result.rows[0];
+    
+    const response = {
       members: [{
         user_id: user.id,
         email: user.email,
-        display_name: user.display_name,
+        display_name: user.display_name || user.email,
         is_owner: true,
         role: 'owner'
       }]
-    });
+    };
+
+    console.log('✅ Returning members:', response);
+    return res.json(response);
 
   } catch (error) {
-    console.error('Error fetching team members:', error);
-    res.status(500).json({ error: 'Failed to fetch team members' });
+    console.error('❌ Error fetching team members:', error);
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    return res.status(500).json({ 
+      error: 'Failed to fetch team members',
+      details: error.message 
+    });
   }
 });
 // Get single team by ID
