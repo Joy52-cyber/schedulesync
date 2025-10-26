@@ -51,6 +51,8 @@ const pool = new Pool({
 });
 
 // Auto-run migrations on startup
+// FIXED AUTO-MIGRATION - Replace the runMigrations() function in server.js
+
 async function runMigrations() {
   console.log('🔄 Running database migrations...');
   try {
@@ -81,23 +83,37 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
     console.log('✅ Indexes created');
     
-    // Create team_members table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS team_members (
-        id SERIAL PRIMARY KEY,
-        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        role VARCHAR(50) DEFAULT 'member',
-        is_owner BOOLEAN DEFAULT FALSE,
-        added_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(team_id, user_id)
-      )
+    // Check if team_members table exists and has is_owner column
+    const tableCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'team_members' AND column_name = 'is_owner'
     `);
-    console.log('✅ team_members table created');
+
+    if (tableCheck.rows.length === 0) {
+      // Drop and recreate team_members table with correct schema
+      await pool.query(`DROP TABLE IF EXISTS team_members CASCADE`);
+      
+      await pool.query(`
+        CREATE TABLE team_members (
+          id SERIAL PRIMARY KEY,
+          team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          role VARCHAR(50) DEFAULT 'member',
+          is_owner BOOLEAN DEFAULT FALSE,
+          added_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(team_id, user_id)
+        )
+      `);
+      console.log('✅ team_members table created with correct schema');
+    } else {
+      console.log('✅ team_members table already has correct schema');
+    }
 
     // Create team_members indexes
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`);
+    console.log('✅ team_members indexes created');
     
     // Add existing team owners to team_members
     await pool.query(`
