@@ -1835,10 +1835,6 @@ app.post('/api/booking/create', async (req, res) => {
    BOOKING REQUEST API ENDPOINTS - PHASE 1  ← ADD NEW CODE HERE
    ========================================================================== */
 
-app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
-  // ... paste code from booking-request-endpoints.js ...
-});
-
 /* ============================================================================
    PHASE 1 - COMPLETE ENDPOINTS BUNDLE
    Add these endpoints to your server.js after your existing endpoints
