@@ -34,7 +34,10 @@ try {
 }
 
 const app = express();
-
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
 /* ---------------------------------- Config --------------------------------- */
 const clean = (v) => (v || '').trim();
 
@@ -3247,5 +3250,6 @@ function shutdown(sig) {
   server.close(() => process.exit(0));
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));/ /   F o r c e   r e d e p l o y  
+process.on('SIGTERM', () => shutdown('SIGTERM'));/ /   F o r c e   r e d e p l o y 
+ 
  
