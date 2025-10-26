@@ -1084,7 +1084,7 @@ app.get('/api/teams/:id/members', authenticateToken, async (req, res) => {
     const result = await pool.query(
       `SELECT tm.*, u.name, u.email
        FROM team_members tm
-       JOIN users u ON tm.user_id = u.id
+       JOIN users u ON t.owner_id = u.id
        WHERE tm.team_id = $1
        ORDER BY tm.joined_at DESC`,
       [id]
