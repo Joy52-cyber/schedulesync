@@ -240,11 +240,138 @@ async function sendTeamWelcome(email, teamName) {
   }
 }
 
+// ============================================================================
+// NEW: 2-Way Availability Request Functions
+// ============================================================================
+
+// Send availability request to guest
+async function sendAvailabilityRequest(guestEmail, guestName, teamName, requestUrl) {
+  if (!resend) {
+    console.log('⚠️  Email service not available');
+    return false;
+  }
+
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: guestEmail,
+      subject: `Meeting Request from ${teamName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+            .link { color: #667eea; word-break: break-all; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">📅 Meeting Request</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${guestName},</p>
+              <p><strong>${teamName}</strong> would like to schedule a meeting with you.</p>
+              <p>To find a time that works for both of you, please submit your availability using the link below:</p>
+              <div style="text-align: center;">
+                <a href="${requestUrl}" class="button">Submit Your Availability</a>
+              </div>
+              <p>Or copy and paste this link into your browser:</p>
+              <p class="link">${requestUrl}</p>
+              <p style="margin-top: 30px; color: #6b7280; font-size: 14px;">
+                This will help us find time slots that work for everyone.
+              </p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} ScheduleSync. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    });
+
+    console.log('✅ Availability request email sent to:', guestEmail);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send availability request email:', error.message);
+    return false;
+  }
+}
+
+// Send availability submitted notification to owner
+async function sendAvailabilitySubmitted(ownerEmail, ownerName, guestName, overlapCount) {
+  if (!resend) {
+    console.log('⚠️  Email service not available');
+    return false;
+  }
+
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: ownerEmail,
+      subject: `${guestName} submitted their availability`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .highlight { background: #e0e7ff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+            .count { color: #667eea; font-size: 48px; font-weight: bold; margin: 0; }
+            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">✅ Availability Received</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${ownerName},</p>
+              <p><strong>${guestName}</strong> has submitted their availability.</p>
+              <div class="highlight">
+                <p class="count">${overlapCount}</p>
+                <p style="margin: 5px 0 0 0; color: #4b5563;">matching time slot${overlapCount !== 1 ? 's' : ''} found</p>
+              </div>
+              <p>Log in to your ScheduleSync dashboard to view the available times and book the final meeting.</p>
+              <p style="margin-top: 30px; color: #6b7280; font-size: 14px;">
+                The system has automatically found times when both you and ${guestName} are available.
+              </p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} ScheduleSync. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    });
+
+    console.log('✅ Availability submitted notification sent to:', ownerEmail);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send availability submitted notification:', error.message);
+    return false;
+  }
+}
+
 module.exports = {
   sendPasswordReset,
   sendPasswordChanged,
   sendBookingConfirmation,
   sendBookingNotificationToOwner,
   sendTeamInvitation,
-  sendTeamWelcome
+  sendTeamWelcome,
+  sendAvailabilityRequest,
+  sendAvailabilitySubmitted
 };

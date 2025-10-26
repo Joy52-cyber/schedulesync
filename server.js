@@ -2484,42 +2484,14 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
     console.log('✅ Availability request created:', request.id);
     console.log('🔗 Booking URL:', bookingUrl);
     
-    // Send email to guest (if email service available)
-    if (emailService && emailService.sendBookingConfirmation) {
-      try {
-        // Use the booking confirmation template but customize the message
-        const guestBooking = {
-          guest_name: guest_name,
-          guest_email: guest_email,
-          booking_date: 'TBD',
-          booking_time: 'TBD'
-        };
-        
-        // Send custom availability request email
-        const resend = require('resend');
-        const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
-        
-        await resendClient.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'ScheduleSync <onboarding@resend.dev>',
-          to: guest_email,
-          subject: `Meeting Request from ${team.name}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #667eea;">You've been invited to schedule a meeting</h2>
-              <p>Hi ${guest_name},</p>
-              <p><strong>${team.name}</strong> would like to meet with you. Please submit your availability so we can find a time that works for both of you.</p>
-              <p style="margin: 30px 0;">
-                <a href="${bookingUrl}" style="background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Submit Your Availability</a>
-              </p>
-              <p style="color: #666; font-size: 14px;">Or copy this link: ${bookingUrl}</p>
-            </div>
-          `
-        });
-        
-        console.log('✅ Availability request email sent to:', guest_email);
-      } catch (err) {
-        console.error('Email error:', err);
-      }
+    // Send email to guest
+    if (emailService && emailService.sendAvailabilityRequest) {
+      await emailService.sendAvailabilityRequest(
+        guest_email,
+        guest_name,
+        team.name,
+        bookingUrl
+      );
     }
     
     res.status(201).json({
@@ -2651,8 +2623,8 @@ app.post('/api/availability-requests/:token/submit', async (req, res) => {
     // Calculate overlap
     const overlap = await calculateOverlap(request.team_id, request.id);
     
-    // Send email to owner (if email service available)
-    if (emailService && emailService.sendBookingConfirmation) {
+    // Send email to owner
+    if (emailService && emailService.sendAvailabilitySubmitted) {
       try {
         const teamResult = await pool.query(
           'SELECT t.*, u.email as owner_email, u.name as owner_name FROM teams t JOIN users u ON t.owner_id = u.id WHERE t.id = $1',
@@ -2661,31 +2633,15 @@ app.post('/api/availability-requests/:token/submit', async (req, res) => {
         
         if (teamResult.rows.length > 0) {
           const team = teamResult.rows[0];
-          
-          const resend = require('resend');
-          const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
-          
-          await resendClient.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'ScheduleSync <onboarding@resend.dev>',
-            to: team.owner_email,
-            subject: `${request.guest_name} submitted their availability`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #667eea;">Guest Availability Submitted</h2>
-                <p>Hi ${team.owner_name},</p>
-                <p><strong>${request.guest_name}</strong> has submitted their availability.</p>
-                <p style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                  <strong style="color: #667eea; font-size: 24px;">${overlap.length}</strong> time slots found where both of you are available.
-                </p>
-                <p>Log in to your dashboard to view the available times and book the final meeting.</p>
-              </div>
-            `
-          });
-          
-          console.log('✅ Availability submitted notification sent to:', team.owner_email);
+          await emailService.sendAvailabilitySubmitted(
+            team.owner_email,
+            team.owner_name,
+            request.guest_name,
+            overlap.length
+          );
         }
       } catch (err) {
-        console.error('Email error:', err);
+        console.error('Email notification error:', err);
       }
     }
     
