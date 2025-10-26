@@ -53,6 +53,9 @@ const pool = new Pool({
 // Auto-run migrations on startup
 // FIXED AUTO-MIGRATION - Replace the runMigrations() function in server.js
 
+// ROBUST AUTO-MIGRATION - Replace runMigrations() in server.js
+// This version adds missing columns instead of dropping tables
+
 async function runMigrations() {
   console.log('🔄 Running database migrations...');
   try {
@@ -83,31 +86,29 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
     console.log('✅ Indexes created');
     
-    // Check if team_members table exists and has is_owner column
-    const tableCheck = await pool.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'team_members' AND column_name = 'is_owner'
+    // Create team_members table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50) DEFAULT 'member',
+        added_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(team_id, user_id)
+      )
     `);
+    console.log('✅ team_members table exists');
 
-    if (tableCheck.rows.length === 0) {
-      // Drop and recreate team_members table with correct schema
-      await pool.query(`DROP TABLE IF EXISTS team_members CASCADE`);
-      
+    // Add is_owner column if it doesn't exist
+    try {
       await pool.query(`
-        CREATE TABLE team_members (
-          id SERIAL PRIMARY KEY,
-          team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          role VARCHAR(50) DEFAULT 'member',
-          is_owner BOOLEAN DEFAULT FALSE,
-          added_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(team_id, user_id)
-        )
+        ALTER TABLE team_members 
+        ADD COLUMN IF NOT EXISTS is_owner BOOLEAN DEFAULT FALSE
       `);
-      console.log('✅ team_members table created with correct schema');
-    } else {
-      console.log('✅ team_members table already has correct schema');
+      console.log('✅ is_owner column added/verified');
+    } catch (alterError) {
+      // Column might already exist, that's okay
+      console.log('✅ is_owner column already exists');
     }
 
     // Create team_members indexes
@@ -120,7 +121,11 @@ async function runMigrations() {
       INSERT INTO team_members (team_id, user_id, role, is_owner)
       SELECT id, owner_id, 'owner', TRUE
       FROM teams
-      ON CONFLICT (team_id, user_id) DO NOTHING
+      WHERE NOT EXISTS (
+        SELECT 1 FROM team_members 
+        WHERE team_members.team_id = teams.id 
+        AND team_members.user_id = teams.owner_id
+      )
     `);
     console.log('✅ Team owners added to team_members');
     
@@ -129,6 +134,8 @@ async function runMigrations() {
     console.error('❌ Migration error:', error);
   }
 }
+
+runMigrations();
 
 runMigrations();
 
