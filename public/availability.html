@@ -52,6 +52,78 @@
             margin-bottom: 20px;
         }
 
+        /* Info Banner */
+        .info-banner {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 3px solid #7c3aed;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .info-banner p {
+            color: #475569;
+            line-height: 1.5;
+        }
+
+        /* Auto-fill Banner */
+        .autofill-banner {
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+            border: 2px solid #e9d5ff;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .autofill-icon {
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+
+        .autofill-content {
+            flex: 1;
+        }
+
+        .autofill-content h3 {
+            font-size: 15px;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+        .autofill-content p {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+
+        .autofill-btn {
+            padding: 8px 16px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .autofill-btn:hover {
+            background: #6d28d9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+
+        .autofill-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* Quick Actions */
         .quick-actions {
             display: grid;
@@ -116,13 +188,13 @@
         }
 
         .day-card:hover {
-            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
         }
 
         .day-card.active {
             background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
             border-color: #7c3aed;
-            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.2);
         }
 
         .day-header {
@@ -254,8 +326,8 @@
 
         .save-btn:hover {
             background: #6d28d9;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
         }
 
         .save-btn:disabled {
@@ -333,20 +405,44 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Info Banner */
-        .info-banner {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            border-left: 3px solid #7c3aed;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            font-size: 13px;
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
         }
 
-        .info-banner p {
-            color: #475569;
-            line-height: 1.5;
-            margin: 0;
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #7c3aed;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .loading-card p {
+            color: #64748b;
+            font-size: 15px;
         }
 
         /* Responsive */
@@ -377,12 +473,24 @@
 
         <div class="header">
             <h1>Set Your Availability</h1>
-            <p class="subtitle">Configure when you're available for meetings</p>
+            <p class="subtitle">Auto-fill from calendar or customize manually</p>
         </div>
 
         <div class="card">
             <div class="info-banner">
-                <p>💡 <strong>Quick Setup:</strong> Use the buttons below for common schedules, or customize each day individually.</p>
+                <p>💡 <strong>Smart Setup:</strong> Click "Auto-fill from Calendar" to analyze your schedule, or use quick presets and customize each day.</p>
+            </div>
+
+            <!-- Auto-fill Banner -->
+            <div class="autofill-banner">
+                <div class="autofill-icon">🤖</div>
+                <div class="autofill-content">
+                    <h3>Smart Calendar Analysis</h3>
+                    <p>Analyze your Google Calendar from the past 2 weeks to detect your typical availability patterns</p>
+                    <button class="autofill-btn" id="autofillBtn">
+                        ✨ Auto-fill from Calendar
+                    </button>
+                </div>
             </div>
 
             <!-- Quick Actions -->
@@ -578,6 +686,14 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-card">
+            <div class="spinner"></div>
+            <p>Analyzing your calendar...</p>
+        </div>
+    </div>
+
     <!-- Success Toast -->
     <div class="toast" id="toast">
         <span class="toast-icon">✅</span>
@@ -643,6 +759,66 @@
                 card.classList.remove('active');
             });
         }
+
+        // Auto-fill from Calendar
+        document.getElementById('autofillBtn').addEventListener('click', async () => {
+            if (!selectedTeamId) {
+                if (confirm('Please select a team first. Would you like to go to Team Management?')) {
+                    window.location.href = '/team-management.html';
+                }
+                return;
+            }
+
+            const autofillBtn = document.getElementById('autofillBtn');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            autofillBtn.disabled = true;
+            loadingOverlay.classList.add('show');
+
+            try {
+                const response = await fetch(`/api/teams/${selectedTeamId}/analyze-availability`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to analyze calendar');
+                }
+
+                const data = await response.json();
+
+                // Clear all first
+                clearAll();
+
+                // Apply detected patterns
+                data.patterns.forEach(pattern => {
+                    const card = document.querySelector(`[data-day="${pattern.day_of_week}"]`);
+                    if (card && pattern.typically_free) {
+                        const toggle = card.querySelector('.day-toggle');
+                        toggle.checked = true;
+                        card.classList.add('active');
+                        
+                        card.querySelector('.start-time').value = pattern.common_start.substring(0, 5);
+                        card.querySelector('.end-time').value = pattern.common_end.substring(0, 5);
+                    }
+                });
+
+                loadingOverlay.classList.remove('show');
+                
+                // Show success toast
+                const toast = document.getElementById('toast');
+                toast.querySelector('span:last-child').textContent = `✨ Auto-filled from your calendar! Found patterns for ${data.patterns.filter(p => p.typically_free).length} days.`;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 4000);
+
+            } catch (error) {
+                console.error('Error:', error);
+                loadingOverlay.classList.remove('show');
+                alert('Error: ' + error.message);
+            } finally {
+                autofillBtn.disabled = false;
+            }
+        });
 
         // Load existing availability
         async function loadAvailability() {
@@ -726,6 +902,7 @@
                 if (response.ok) {
                     // Show success toast
                     const toast = document.getElementById('toast');
+                    toast.querySelector('span:last-child').textContent = 'Availability saved successfully!';
                     toast.classList.add('show');
                     setTimeout(() => toast.classList.remove('show'), 3000);
 
@@ -745,16 +922,54 @@
         });
 
         // Load availability on page load
-        if (!selectedTeamId) {
-            // Show alert and redirect to team management
-            if (confirm('Please select a team first. Would you like to go to Team Management to select or create a team?')) {
-                window.location.href = '/team-management.html';
+        async function initializePage() {
+            // If no team ID, try to get user's first team automatically
+            if (!selectedTeamId) {
+                try {
+                    const response = await fetch('/api/teams', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.teams && data.teams.length > 0) {
+                            // Auto-select first team
+                            selectedTeamId = data.teams[0].id;
+                            localStorage.setItem('selectedTeamId', selectedTeamId);
+                            loadAvailability();
+                        } else {
+                            // No teams found - ask to create one
+                            if (confirm('You don\'t have any teams yet. Would you like to go to Team Management to create a team?')) {
+                                window.location.href = '/team-management.html';
+                            } else {
+                                window.location.href = '/dashboard.html';
+                            }
+                        }
+                    } else {
+                        // API error - ask to go to team management
+                        if (confirm('Please select a team first. Would you like to go to Team Management?')) {
+                            window.location.href = '/team-management.html';
+                        } else {
+                            window.location.href = '/dashboard.html';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching teams:', error);
+                    if (confirm('Please select a team first. Would you like to go to Team Management?')) {
+                        window.location.href = '/team-management.html';
+                    } else {
+                        window.location.href = '/dashboard.html';
+                    }
+                }
             } else {
-                window.location.href = '/dashboard.html';
+                // Team ID exists, load availability
+                loadAvailability();
             }
-        } else {
-            loadAvailability();
         }
+        
+        initializePage();
     </script>
 </body>
 </html>
