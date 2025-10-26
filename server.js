@@ -2136,8 +2136,8 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
 
 /* ============================================================================
    END OF PHASE 1 ENDPOINTS
-   ========================================================================== */// ... paste code from booking-request-endpoints.js ...
-});
+   ==========================================================================
+   */
 /* ============================================================================
    STEP 1: ADD THIS AFTER YOUR DATABASE POOL INITIALIZATION
    
