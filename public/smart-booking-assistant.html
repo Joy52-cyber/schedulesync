@@ -619,6 +619,14 @@
     </div>
 
     <script>
+    // Auto-fill booking link if coming from booking page
+window.addEventListener('DOMContentLoaded', () => {
+    const savedLink = sessionStorage.getItem('bookingLink');
+    if (savedLink) {
+        document.getElementById('bookingLink').value = savedLink;
+        sessionStorage.removeItem('bookingLink'); // Clear after use
+    }
+});
         let selectedSlot = null;
         let availableSlots = [];
         let bookingData = {};

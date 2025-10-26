@@ -487,13 +487,28 @@
             <p>Loading booking information...</p>
         </div>
 
-        <!-- Main Content -->
-        <div id="mainContent" class="hidden">
-            <!-- Page Header -->
-            <div class="page-header">
-                <h1 class="page-title">Book a Meeting</h1>
-                <p class="page-subtitle">Schedule your appointment in a few simple steps</p>
+       <!-- Page Header -->
+<div class="page-header">
+    <h1 class="page-title">Book a Meeting</h1>
+    <p class="page-subtitle">Schedule your appointment in a few simple steps</p>
+    
+    <!-- Smart Assistant Button -->
+    <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; text-align: center;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 250px;">
+                <div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
+                    🤖 Try Our Smart Booking Assistant
+                </div>
+                <div style="font-size: 0.875rem; color: rgba(255,255,255,0.9);">
+                    Let AI find the perfect time for you automatically!
+                </div>
             </div>
+            <button onclick="useSmartAssistant()" style="padding: 0.75rem 2rem; background: white; color: #667eea; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; white-space: nowrap; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                Use Smart Assistant →
+            </button>
+        </div>
+    </div>
+</div>
 
             <!-- Team Info Card -->
             <div class="team-card">
@@ -613,6 +628,17 @@
 
 
     <script>
+    // Function to redirect to smart assistant with current booking URL
+function useSmartAssistant() {
+    const currentURL = window.location.href;
+    const smartAssistantURL = '/smart-booking-assistant.html';
+    
+    // Store the booking URL in session storage
+    sessionStorage.setItem('bookingLink', currentURL);
+    
+    // Redirect to smart assistant
+    window.location.href = smartAssistantURL;
+}
         const urlParams = new URLSearchParams(window.location.search);
         const teamId = urlParams.get('team') || window.location.pathname.split('/').pop();
         
