@@ -1422,6 +1422,307 @@ async function handleBookingSubmission(req, res) {
 app.post('/api/bookings', handleBookingSubmission);
 app.post('/api/teams/bookings/public', handleBookingSubmission);
 
+/* ============================================================================
+   SMART BOOKING ASSISTANT API ENDPOINTS
+   ========================================================================== */
+
+// Find common available slots between host and guest
+app.post('/api/booking/find-slots', async (req, res) => {
+  try {
+    const { team_id, guest_email } = req.body;
+
+    if (!team_id || !guest_email) {
+      return res.status(400).json({ error: 'team_id and guest_email required' });
+    }
+
+    // Get team and host info
+    const teamResult = await pool.query(
+      `SELECT t.*, u.email as host_email, u.google_access_token, u.google_refresh_token, u.display_name as host_name
+       FROM teams t
+       JOIN users u ON t.user_id = u.id
+       WHERE t.id = $1 OR t.public_url = $1`,
+      [team_id]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const team = teamResult.rows[0];
+
+    if (!team.google_access_token) {
+      return res.status(400).json({ 
+        error: 'Host calendar not connected',
+        message: 'The host needs to connect their Google Calendar'
+      });
+    }
+
+    // Get busy times for host (next 14 days)
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 14);
+
+    const hostBusyTimes = await googleAuth.getCalendarBusyTimes(
+      team.google_access_token,
+      team.google_refresh_token,
+      startDate,
+      endDate
+    );
+
+    // Try to get guest's busy times (if they have connected calendar)
+    let guestBusyTimes = [];
+    const guestResult = await pool.query(
+      'SELECT google_access_token, google_refresh_token FROM users WHERE email = $1',
+      [guest_email]
+    );
+
+    if (guestResult.rows.length > 0 && guestResult.rows[0].google_access_token) {
+      const guest = guestResult.rows[0];
+      guestBusyTimes = await googleAuth.getCalendarBusyTimes(
+        guest.google_access_token,
+        guest.google_refresh_token,
+        startDate,
+        endDate
+      );
+    }
+
+    // Find common free slots
+    const availableSlots = [];
+    const currentDate = new Date(startDate);
+    const meetingDuration = 60; // 60 minutes default
+
+    while (currentDate < endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      // Check business hours (9 AM - 5 PM)
+      for (let hour = 9; hour < 17; hour++) {
+        const slotStart = new Date(`${dateStr}T${hour.toString().padStart(2, '0')}:00:00`);
+        const slotEnd = new Date(slotStart);
+        slotEnd.setMinutes(slotEnd.getMinutes() + meetingDuration);
+
+        // Skip if slot is in the past
+        if (slotStart < new Date()) continue;
+
+        // Check if slot is free for both host and guest
+        const hostIsBusy = hostBusyTimes.some(busy => {
+          const busyStart = new Date(busy.start);
+          const busyEnd = new Date(busy.end);
+          return (slotStart < busyEnd && slotEnd > busyStart);
+        });
+
+        const guestIsBusy = guestBusyTimes.some(busy => {
+          const busyStart = new Date(busy.start);
+          const busyEnd = new Date(busy.end);
+          return (slotStart < busyEnd && slotEnd > busyStart);
+        });
+
+        if (!hostIsBusy && !guestIsBusy) {
+          availableSlots.push({
+            start: slotStart.toISOString(),
+            end: slotEnd.toISOString(),
+            date: dateStr,
+            time: `${hour.toString().padStart(2, '0')}:00`,
+            duration: meetingDuration,
+            day_of_week: slotStart.getDay()
+          });
+        }
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Sort by date (closest first) and return top 10
+    availableSlots.sort((a, b) => new Date(a.start) - new Date(b.start));
+    const topSlots = availableSlots.slice(0, 10);
+
+    if (topSlots.length === 0) {
+      return res.status(404).json({ 
+        error: 'No available slots found',
+        message: 'No common free time found in the next 14 days'
+      });
+    }
+
+    res.json({ 
+      slots: topSlots,
+      total_found: availableSlots.length,
+      host_name: team.host_name || team.name,
+      guest_calendar_connected: guestBusyTimes.length > 0
+    });
+
+  } catch (error) {
+    console.error('Error finding slots:', error);
+    res.status(500).json({ error: 'Failed to find available slots' });
+  }
+});
+
+// Create booking with automatic calendar invites
+app.post('/api/booking/create', async (req, res) => {
+  try {
+    const { team_id, slot, guest_name, guest_email, guest_notes } = req.body;
+
+    if (!team_id || !slot || !guest_name || !guest_email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get team and host info
+    const teamResult = await pool.query(
+      `SELECT t.*, u.email as host_email, u.google_access_token, u.google_refresh_token, u.display_name as host_name
+       FROM teams t
+       JOIN users u ON t.user_id = u.id
+       WHERE t.id = $1 OR t.public_url = $1`,
+      [team_id]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const team = teamResult.rows[0];
+
+    // Create booking in database
+    const bookingResult = await pool.query(
+      `INSERT INTO bookings (
+        team_id, guest_name, guest_email, guest_notes, 
+        booking_date, booking_time, start_time, end_time, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        team.id,
+        guest_name,
+        guest_email,
+        guest_notes || '',
+        slot.date,
+        slot.time,
+        slot.start,
+        slot.end,
+        'confirmed'
+      ]
+    );
+
+    const booking = bookingResult.rows[0];
+
+    // Create calendar event for host
+    if (team.google_access_token && googleAuth) {
+      try {
+        const eventData = {
+          summary: `Meeting with ${guest_name}`,
+          description: guest_notes || 'Scheduled via ScheduleSync',
+          start: {
+            dateTime: slot.start,
+            timeZone: 'UTC'
+          },
+          end: {
+            dateTime: slot.end,
+            timeZone: 'UTC'
+          },
+          attendees: [
+            { email: guest_email, displayName: guest_name }
+          ]
+        };
+
+        const hostEvent = await googleAuth.createCalendarEvent(
+          team.google_access_token,
+          team.google_refresh_token,
+          eventData
+        );
+
+        console.log('✅ Calendar event created for host:', hostEvent.id);
+      } catch (calError) {
+        console.error('Error creating host calendar event:', calError);
+      }
+    }
+
+    // Create calendar event for guest (if they have calendar connected)
+    const guestResult = await pool.query(
+      'SELECT google_access_token, google_refresh_token FROM users WHERE email = $1',
+      [guest_email]
+    );
+
+    if (guestResult.rows.length > 0 && guestResult.rows[0].google_access_token && googleAuth) {
+      try {
+        const guest = guestResult.rows[0];
+        const eventData = {
+          summary: `Meeting with ${team.host_name || team.name}`,
+          description: guest_notes || 'Scheduled via ScheduleSync',
+          start: {
+            dateTime: slot.start,
+            timeZone: 'UTC'
+          },
+          end: {
+            dateTime: slot.end,
+            timeZone: 'UTC'
+          },
+          attendees: [
+            { email: team.host_email }
+          ]
+        };
+
+        const guestEvent = await googleAuth.createCalendarEvent(
+          guest.google_access_token,
+          guest.google_refresh_token,
+          eventData
+        );
+
+        console.log('✅ Calendar event created for guest:', guestEvent.id);
+      } catch (calError) {
+        console.error('Error creating guest calendar event:', calError);
+      }
+    }
+
+    // Send confirmation emails (if email service available)
+    if (emailService) {
+      try {
+        // Email to guest
+        await emailService.sendEmail({
+          to: guest_email,
+          subject: `Meeting Confirmed: ${new Date(slot.start).toLocaleString()}`,
+          html: `
+            <h2>🎉 Your meeting is confirmed!</h2>
+            <p>Hi ${guest_name},</p>
+            <p>Your meeting with ${team.host_name || team.name} has been scheduled.</p>
+            <p><strong>📅 Date & Time:</strong> ${new Date(slot.start).toLocaleString()}</p>
+            <p><strong>⏱️ Duration:</strong> ${slot.duration} minutes</p>
+            ${guest_notes ? `<p><strong>📝 Notes:</strong> ${guest_notes}</p>` : ''}
+            <p>A calendar invite has been sent to your email.</p>
+            <p>Booking ID: ${booking.id}</p>
+          `
+        });
+
+        // Email to host
+        await emailService.sendEmail({
+          to: team.host_email,
+          subject: `New Booking: ${guest_name}`,
+          html: `
+            <h2>📅 New Meeting Booked</h2>
+            <p>${guest_name} has booked a meeting with you.</p>
+            <p><strong>📅 Date & Time:</strong> ${new Date(slot.start).toLocaleString()}</p>
+            <p><strong>📧 Guest Email:</strong> ${guest_email}</p>
+            ${guest_notes ? `<p><strong>📝 Notes:</strong> ${guest_notes}</p>` : ''}
+            <p>A calendar event has been added to your calendar.</p>
+          `
+        });
+
+        console.log('✅ Confirmation emails sent');
+      } catch (emailError) {
+        console.error('Error sending emails:', emailError);
+      }
+    }
+
+    res.json({
+      success: true,
+      id: booking.id,
+      booking,
+      host_name: team.host_name || team.name,
+      calendar_invites_sent: true
+    });
+
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    res.status(500).json({ error: 'Failed to create booking' });
+  }
+});
+
+
 /* ----------------------- Availability Management ----------------------- */
 
 // Save user/team availability
