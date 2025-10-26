@@ -1931,62 +1931,6 @@ if (!global.migrationsRun) {
 // SIMPLIFIED MIGRATION - Works without is_owner column
 // Replace runMigrations() in server.js
 
-async function runMigrations() {
-  console.log('🔄 Running Phase 1 database migrations...');
-  try {
-    // Create booking_requests table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS booking_requests (
-        id SERIAL PRIMARY KEY,
-        team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-        created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        recipient_email VARCHAR(255) NOT NULL,
-        recipient_name VARCHAR(255) NOT NULL,
-        team_members INTEGER[] NOT NULL,
-        custom_message TEXT,
-        unique_token VARCHAR(255) UNIQUE NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending',
-        guest_calendar_connected BOOLEAN DEFAULT FALSE,
-        booked_slot_start TIMESTAMP,
-        booked_slot_end TIMESTAMP,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    console.log('✅ booking_requests table ready');
-
-    // Create indexes
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(unique_token)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_status ON booking_requests(status)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_team ON booking_requests(team_id)`);
-    console.log('✅ booking_requests indexes ready');
-    
-    console.log('🎉 Phase 1 migrations completed!');
-  } catch (error) {
-    console.error('❌ Migration error:', error.message);
-  }
-}
-
-// Only run migrations once
-if (!global.migrationsRun) {
-  global.migrationsRun = true;
-  runMigrations();
-}
-
-      // Create booking link
-      const bookingLink = `${process.env.APP_URL}/booking-request/${uniqueToken}`;
-      
-      // Get team member names
-      const memberNames = [];
-      for (const memberId of team_members) {
-        const memberResult = await pool.query(
-          'SELECT display_name, email FROM users WHERE id = $1',
-          [memberId]
-        );
-        if (memberResult.rows.length > 0) {
-          memberNames.push(memberResult.rows[0].display_name || memberResult.rows[0].email);
-        }
-      }
 
       // Email HTML template
       const emailHtml = `
