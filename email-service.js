@@ -78,24 +78,22 @@ async function sendPasswordReset(to, userName, resetLink) {
   }
 }
 // Generic email sending function
+// Generic email sending function
 async function sendEmail({ to, subject, html }) {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    secure: process.env.SMTP_PORT == 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
+  if (!resend) {
+    console.log('⚠️  Email service not available');
+    return false;
+  }
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to,
-      subject,
-      html
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: to,
+      subject: subject,
+      html: html
     });
+    
+    console.log('✅ Email sent to:', to);
     return true;
   } catch (error) {
     console.error('❌ Failed to send email:', error);
