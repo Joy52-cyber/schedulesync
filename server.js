@@ -1036,7 +1036,24 @@ app.get('/api/analytics/dashboard', authenticateToken, async (req, res) => {
 
 // Get all teams for current user
 // REPLACE the /api/teams/:teamId/members endpoint in server.js with this:
-
+// Get all teams for current user
+app.get('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      `SELECT t.*, 
+       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+       FROM teams t
+       WHERE t.owner_id = $1
+       ORDER BY t.created_at DESC`,
+      [userId]
+    );
+    res.json({ teams: result.rows });
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
 app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.teamId;
@@ -1352,6 +1369,8 @@ app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to save availability' });
   }
 });
+
+
 
 // Get public team info (no auth required)
 
@@ -1824,8 +1843,300 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
   // ... paste code from booking-request-endpoints.js ...
 });
 
+/* ============================================================================
+   PHASE 1 - COMPLETE ENDPOINTS BUNDLE
+   Add these endpoints to your server.js after your existing endpoints
+   ========================================================================== */
+
+// ==================== GET ALL TEAMS ====================
+app.get('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      `SELECT t.*, 
+       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+       FROM teams t
+       WHERE t.owner_id = $1
+       ORDER BY t.created_at DESC`,
+      [userId]
+    );
+    res.json({ teams: result.rows });
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
+// ==================== GET TEAM MEMBERS ====================
 app.get('/api/teams/:teamId/members', authenticateToken, async (req, res) => {
-  // ... paste code from booking-request-endpoints.js ...
+  try {
+    const teamId = req.params.teamId;
+    const userId = req.userId;
+
+    // Get the current user's info
+    const userResult = await pool.query(
+      'SELECT id, email, display_name FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // For Phase 1, just return the logged-in user as owner
+    return res.json({
+      members: [{
+        user_id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        is_owner: true,
+        role: 'owner'
+      }]
+    });
+
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ error: 'Failed to fetch team members' });
+  }
+});
+
+// ==================== CREATE BOOKING REQUEST ====================
+app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { team_id, team_members, recipients, custom_message } = req.body;
+
+    // Validation
+    if (!team_id || !team_members || !recipients || recipients.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify team ownership
+    const teamCheck = await pool.query(
+      'SELECT * FROM teams WHERE id = $1 AND owner_id = $2',
+      [team_id, userId]
+    );
+
+    if (teamCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Not authorized to create requests for this team' });
+    }
+
+    const team = teamCheck.rows[0];
+
+    // Get user info
+    const userResult = await pool.query(
+      'SELECT display_name, email FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = userResult.rows[0];
+
+    // Create booking requests for each recipient
+    const requests = [];
+
+    for (const recipient of recipients) {
+      // Generate unique token
+      const uniqueToken = crypto.randomBytes(32).toString('hex');
+
+      // Insert booking request
+      const result = await pool.query(
+        `INSERT INTO booking_requests (
+          team_id, 
+          created_by, 
+          recipient_email, 
+          recipient_name, 
+          team_members, 
+          custom_message,
+          unique_token, 
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [
+          team_id,
+          userId,
+          recipient.email,
+          recipient.name,
+          team_members,
+          custom_message || '',
+          uniqueToken,
+          'pending'
+        ]
+      );
+
+      requests.push(result.rows[0]);
+
+      // Create booking link
+      const bookingLink = `${process.env.APP_URL || 'https://schedulesync-production.up.railway.app'}/booking-request/${uniqueToken}`;
+      
+      // Get team member names
+      const memberNames = [];
+      for (const memberId of team_members) {
+        const memberResult = await pool.query(
+          'SELECT display_name, email FROM users WHERE id = $1',
+          [memberId]
+        );
+        if (memberResult.rows.length > 0) {
+          memberNames.push(memberResult.rows[0].display_name || memberResult.rows[0].email);
+        }
+      }
+
+      // Email HTML template
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              line-height: 1.6; 
+              color: #333; 
+              margin: 0;
+              padding: 0;
+            }
+            .container { 
+              max-width: 600px; 
+              margin: 0 auto; 
+              padding: 20px; 
+            }
+            .header { 
+              background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); 
+              color: white; 
+              padding: 30px; 
+              border-radius: 12px 12px 0 0; 
+              text-align: center; 
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 28px;
+            }
+            .content { 
+              background: white; 
+              padding: 30px; 
+              border: 1px solid #e2e8f0; 
+              border-top: none; 
+              border-radius: 0 0 12px 12px;
+            }
+            .button { 
+              display: inline-block; 
+              padding: 14px 32px; 
+              background: #7c3aed; 
+              color: white !important; 
+              text-decoration: none; 
+              border-radius: 8px; 
+              font-weight: 600; 
+              margin: 20px 0; 
+            }
+            .team-members { 
+              background: #f8fafc; 
+              padding: 16px; 
+              border-radius: 8px; 
+              margin: 16px 0; 
+            }
+            .member { 
+              padding: 4px 0; 
+              color: #475569; 
+            }
+            .custom-message {
+              background: #f1f5f9;
+              padding: 16px;
+              border-radius: 8px;
+              font-style: italic;
+              margin: 16px 0;
+              border-left: 3px solid #7c3aed;
+            }
+            .features {
+              color: #64748b;
+              font-size: 14px;
+              margin-top: 20px;
+            }
+            .features div {
+              padding: 4px 0;
+            }
+            .footer {
+              text-align: center;
+              color: #94a3b8;
+              font-size: 14px;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e2e8f0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📅 Meeting Request</h1>
+            </div>
+            <div class="content">
+              <h2>Hi ${recipient.name}!</h2>
+              
+              <p><strong>${user.display_name || user.email}</strong> from <strong>${team.name}</strong> would like to schedule a meeting with you.</p>
+              
+              ${custom_message ? `<div class="custom-message">"${custom_message}"</div>` : ''}
+              
+              <div class="team-members">
+                <strong>📋 Meeting Attendees:</strong>
+                ${memberNames.map(name => `<div class="member">• ${name}</div>`).join('')}
+              </div>
+              
+              <p>To find the perfect time that works for everyone, click the button below:</p>
+              
+              <div style="text-align: center;">
+                <a href="${bookingLink}" class="button">
+                  📅 Connect Calendar & Book Meeting
+                </a>
+              </div>
+              
+              <div class="features">
+                <p><strong>Our smart assistant will:</strong></p>
+                <div>✓ Connect your calendar</div>
+                <div>✓ Analyze everyone's availability</div>
+                <div>✓ Find the perfect mutual time</div>
+                <div>✓ Automatically book the meeting</div>
+              </div>
+              
+              <div class="footer">
+                <p>Powered by ScheduleSync</p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Send email
+      if (emailService) {
+        try {
+          await emailService.sendEmail({
+            to: recipient.email,
+            subject: `Meeting Request from ${user.display_name || user.email}`,
+            html: emailHtml
+          });
+          console.log(`✅ Booking request email sent to ${recipient.email}`);
+        } catch (emailError) {
+          console.error('Error sending email to', recipient.email, ':', emailError);
+        }
+      } else {
+        console.log('⚠️ Email service not configured - request created but email not sent');
+      }
+    }
+
+    res.json({
+      success: true,
+      requests_created: requests.length,
+      requests: requests
+    });
+
+  } catch (error) {
+    console.error('Error creating booking request:', error);
+    res.status(500).json({ error: 'Failed to create booking request' });
+  }
+});
+
+/* ============================================================================
+   END OF PHASE 1 ENDPOINTS
+   ========================================================================== */// ... paste code from booking-request-endpoints.js ...
 });
 /* ============================================================================
    STEP 1: ADD THIS AFTER YOUR DATABASE POOL INITIALIZATION
