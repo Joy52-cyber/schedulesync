@@ -339,11 +339,7 @@ app.get('/api/teams/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch team' });
   }
 });
-    res.json({ team: result.rows[0] });
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
+
 
 // Owner availability CRUD (very simple: replace owner slots for a team)
 app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
@@ -384,6 +380,11 @@ app.get('/api/teams/:id/availability', authenticateToken, async (req, res) => {
 // ----------------------------------------------------------------------------
 // Availability Requests (owner invites guest to offer times; guest submits)
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Availability Requests (owner invites guest to offer times; guest submits)
+// ----------------------------------------------------------------------------
+
+// Create availability request (new flow)
 app.post('/api/availability-requests', authenticateToken, async (req, res) => {
   try {
     const { team_id, guest_name, guest_email, guest_notes } = req.body;
@@ -418,24 +419,22 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
   }
 });
 
-// --- Back-compat: support old endpoint & payload used by "Send Request" button ---
+// Back-compat for old “Send Request” button & payload
 app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
   try {
     const { team_id, guest_name, guest_email, guest_notes, recipients } = req.body || {};
 
-    // Validate team ownership once
     const team = await pool
       .query('SELECT * FROM teams WHERE id=$1 AND owner_id=$2', [team_id, req.userId])
       .then((r) => r.rows[0]);
     if (!team) return res.status(403).json({ error: 'Team not found or access denied' });
 
     const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    const out = [];
-
     const toCreate = Array.isArray(recipients) && recipients.length
       ? recipients
       : [{ name: guest_name, email: guest_email, notes: guest_notes }];
 
+    const out = [];
     for (const r of toCreate) {
       if (!r?.email) continue;
       const token = crypto.randomBytes(32).toString('hex');
@@ -446,9 +445,9 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
           [team_id, r.name || '', r.email, r.notes || '', token]
         )
         .then((q) => q.rows[0]);
+
       const url = `${base}/availability-request/${token}`;
 
-      // best-effort email
       if (emailService?.sendAvailabilityRequest) {
         emailService
           .sendAvailabilityRequest(r.email, r.name || '', team.name, url)
@@ -465,7 +464,8 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/availability-requests/:token', async (req, res) => { async (req, res) => {
+// Get availability request (public)
+app.get('/api/availability-requests/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -504,9 +504,9 @@ app.get('/api/availability-requests/:token', async (req, res) => { async (req, r
         guest_name: request.guest_name,
         status: request.status,
         created_at: request.created_at,
-        expires_at: request.expires_at,
+        expires_at: request.expires_at
       },
-      owner_availability: ownerSlots,
+      owner_availability: ownerSlots
     });
   } catch (error) {
     console.error('Error fetching availability request:', error);
@@ -514,10 +514,11 @@ app.get('/api/availability-requests/:token', async (req, res) => { async (req, r
   }
 });
 
+// Guest submits availability
 app.post('/api/availability-requests/:token/submit', async (req, res) => {
   try {
     const { token } = req.params;
-    const { slots } = req.body; // [{day_of_week,start_time,end_time}]
+    const { slots } = req.body;
 
     const request = await pool
       .query('SELECT * FROM availability_requests WHERE token=$1', [token])
@@ -539,10 +540,8 @@ app.post('/api/availability-requests/:token/submit', async (req, res) => {
 
     await pool.query('UPDATE availability_requests SET status=$1 WHERE id=$2', ['submitted', request.id]);
 
-    // naive overlap count
     const overlap = await calculateOverlap(request.team_id, request.id);
 
-    // notify owner (best-effort)
     if (emailService?.sendAvailabilitySubmitted) {
       const team = await pool
         .query('SELECT t.*, u.email as owner_email, u.name as owner_name FROM teams t JOIN users u ON t.owner_id = u.id WHERE t.id=$1', [request.team_id])
@@ -561,6 +560,7 @@ app.post('/api/availability-requests/:token/submit', async (req, res) => {
   }
 });
 
+// Get overlap
 app.get('/api/availability-requests/:token/overlap', async (req, res) => {
   try {
     const { token } = req.params;
@@ -579,6 +579,7 @@ app.get('/api/availability-requests/:token/overlap', async (req, res) => {
   }
 });
 
+// Finalize booking from overlap
 app.post('/api/availability-requests/:token/book', async (req, res) => {
   try {
     const { token } = req.params;
@@ -615,7 +616,11 @@ app.post('/api/availability-requests/:token/book', async (req, res) => {
       if (team) {
         emailService.sendBookingConfirmation(booking, team).catch((err) => console.error('Email error:', err));
         const ownerEmail = await pool.query('SELECT email FROM users WHERE id=$1', [request.owner_id]).then((r) => r.rows[0]?.email);
-        if (ownerEmail) emailService.sendBookingNotificationToOwner(booking, team, ownerEmail).catch((err) => console.error('Email error:', err));
+        if (ownerEmail) {
+          emailService
+            .sendBookingNotificationToOwner(booking, team, ownerEmail)
+            .catch((err) => console.error('Email error:', err));
+        }
       }
     }
 
@@ -625,6 +630,7 @@ app.post('/api/availability-requests/:token/book', async (req, res) => {
     res.status(500).json({ error: 'Failed to finalize booking' });
   }
 });
+
 
 // ----------------------------------------------------------------------------
 // Guest page (pretty path) — serves public/availability-request-guest.html
