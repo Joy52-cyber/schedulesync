@@ -2,6 +2,7 @@
 // -----------------------------------------------------------------------------
 
 require('dotenv').config();
+const fs = require('fs');
 
 const express = require('express');
 const cors = require('cors');
@@ -79,6 +80,22 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+
+// Pretty URLs for HTML pages (e.g., /login -> /public/login.html)
+app.get('*', (req, res, next) => {
+  // let /api/* and real files pass through
+  if (req.path.startsWith('/api') || path.extname(req.path)) return next();
+
+  // map "/foo/bar" -> "/public/foo/bar.html"
+  const cleaned = req.path.replace(/\/+$/, ''); // strip trailing slash
+  const candidate = path.join(__dirname, 'public', (cleaned || '/index').slice(1) + '.html');
+
+  fs.access(candidate, fs.constants.F_OK, (err) => {
+    if (err) return next();            // not an html page; continue to other routes/404
+    return res.sendFile(candidate);
+  });
+});
+
 
 // -----------------------------------------------------------------------------
 // ROOT + HEALTH ROUTES (for Railway + monitoring)
