@@ -4,7 +4,6 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const googleAuthService = require('./google-auth-service');
-const db = require('./database'); // Your database connection
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
