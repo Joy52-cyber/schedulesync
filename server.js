@@ -80,6 +80,26 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// -----------------------------------------------------------------------------
+// ROOT + HEALTH ROUTES (for Railway + monitoring)
+// -----------------------------------------------------------------------------
+app.get('/', (_req, res) => res.status(200).send('OK')); // root for Railway health
+app.get('/health', (_req, res) => res.status(200).json({ ok: true, uptime: process.uptime() }));
+app.head('/health', (_req, res) => res.status(200).end());
+app.get('/api/status', async (_req, res) => {
+  try {
+    const dbOk = await pool.query('SELECT 1').then(() => true).catch(() => false);
+    res.status(200).json({
+      status: 'ScheduleSync API Running',
+      database: dbOk,
+      baseUrl: PUBLIC_BASE_URL
+    });
+  } catch {
+    res.status(500).json({ error: 'Healthcheck failed' });
+  }
+});
+
+
 // 2) ATTACH DATABASE TO ALL REQUESTS (after express.json())
 app.use((req, _res, next) => {
   req.db = pool;
