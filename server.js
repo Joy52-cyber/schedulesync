@@ -477,8 +477,9 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
       )
       .then((r) => r.rows[0]);
 
-    const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    const bookingUrl = `${base}/availability-request/${token}`;
+    // Always use your Railway domain for email and booking links
+const base = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
+      const bookingUrl = `${base}/availability-request/${token}`;
 
     if (emailService?.sendAvailabilityRequest) {
       emailService
@@ -503,7 +504,8 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
       .then((r) => r.rows[0]);
     if (!team) return res.status(403).json({ error: 'Team not found or access denied' });
 
-    const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    // Always use your Railway domain for email and booking links
+const base = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
     const toCreate = Array.isArray(recipients) && recipients.length
       ? recipients
       : [{ name: guest_name, email: guest_email, notes: guest_notes }];
