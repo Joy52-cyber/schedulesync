@@ -1,202 +1,122 @@
-﻿// google-auth-service.js - Google OAuth and Calendar API integration
+﻿// google-auth-service.js — Google OAuth & Calendar helpers
 const { google } = require('googleapis');
 const { OAuth2Client } = require('google-auth-library');
-const axios = require('axios');
 
-// Initialize OAuth2 client
-const getOAuth2Client = () => {
- const redirectUri = (process.env.GOOGLE_REDIRECT_URI || '').trim();
-
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !redirectUri) {
-    throw new Error('Missing Google OAuth credentials. Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.');
-  }
-  
-  return new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri
-  );
-};
-
-// Scopes we need
 const SCOPES = [
   'openid',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events'
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
+function getOAuth2Client() {
+  const redirectUri = (process.env.GOOGLE_REDIRECT_URI || '').trim();
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !redirectUri) {
+    throw new Error('Missing Google OAuth credentials. Check GOOGLE_CLIENT_ID/SECRET and GOOGLE_REDIRECT_URI');
+  }
+  return new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri
+  );
+}
+
 /**
- * Generate Google OAuth URL
+ * Generate a Google OAuth URL for the frontend to redirect the user to.
+ * - Uses select_account (no forced consent every time)
+ * - Enables incremental auth
+ * - Requests offline access (refresh token on first grant)
  */
 function getAuthUrl(options = {}) {
   const oauth2Client = getOAuth2Client();
-  
   const url = oauth2Client.generateAuthUrl({
     access_type: options.access_type || 'offline',
+    include_granted_scopes: true,
     scope: SCOPES,
-    prompt: options.prompt || 'select_account', // Show account picker, but not consent screen if already granted
-    state: options.state || undefined
+    prompt: options.prompt || 'select_account', // avoid re-consent
+    state: options.state || undefined,
   });
-  
   return url;
 }
 
 /**
- * Exchange authorization code for tokens
+ * Exchange "code" for tokens.
  */
 async function getTokensFromCode(code) {
-  try {
-    const oauth2Client = getOAuth2Client();
-    const { tokens } = await oauth2Client.getToken(code);
-    
-    return tokens;
-  } catch (error) {
-    console.error('Error getting tokens:', error);
-    throw error;
-  }
+  const oauth2Client = getOAuth2Client();
+  const { tokens } = await oauth2Client.getToken(code);
+  return tokens; // { access_token, refresh_token, id_token, expiry_date, ... }
 }
 
 /**
- * Alias for backward compatibility
- */
-async function getTokens(code) {
-  return getTokensFromCode(code);
-}
-
-/**
- * Get user info from Google
+ * Fetch Google profile info using access token.
  */
 async function getUserInfo(accessToken) {
-  try {
-    const oauth2Client = getOAuth2Client();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const { data } = await oauth2.userinfo.get();
-    
-    return {
-      google_id: data.id,
-      email: data.email,
-      name: data.name,
-      picture: data.picture
-    };
-  } catch (error) {
-    console.error('Error getting user info:', error);
-    throw error;
-  }
+  const oauth2Client = getOAuth2Client();
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+  const { data } = await oauth2.userinfo.get();
+  // Normalized fields we use
+  return {
+    email: data.email,
+    name: data.name || `${data.given_name || ''} ${data.family_name || ''}`.trim(),
+    picture: data.picture,
+    google_id: data.id,
+  };
 }
 
 /**
- * Get user's Google Calendars
- */
-async function getCalendarList(accessToken, refreshToken) {
-  try {
-    const oauth2Client = getOAuth2Client();
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken
-    });
-    
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const { data } = await calendar.calendarList.list();
-    
-    return data.items.map(cal => ({
-      id: cal.id,
-      name: cal.summary,
-      primary: cal.primary || false,
-      timezone: cal.timeZone,
-      backgroundColor: cal.backgroundColor,
-      accessRole: cal.accessRole
-    }));
-  } catch (error) {
-    console.error('Error fetching calendars:', error);
-    throw error;
-  }
-}
-
-/**
- * Refresh access token using refresh token
- */
-async function refreshAccessToken(refreshToken) {
-  try {
-    const oauth2Client = getOAuth2Client();
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    
-    return credentials.access_token;
-  } catch (error) {
-    console.error('Error refreshing token:', error);
-    throw error;
-  }
-}
-
-/* ============================================================================
-   PHASE 2: CALENDAR INTEGRATION FUNCTIONS
-   ========================================================================== */
-
-/**
- * Get busy times from Google Calendar (for availability checking)
+ * Read calendar busy times using FreeBusy API.
  */
 async function getBusyTimes(accessToken, startDate, endDate) {
-  try {
-    const response = await axios.post(
-      'https://www.googleapis.com/calendar/v3/freeBusy',
-      {
-        timeMin: startDate.toISOString(),
-        timeMax: endDate.toISOString(),
-        items: [{ id: 'primary' }]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+  const auth = getOAuth2Client();
+  auth.setCredentials({ access_token: accessToken });
+  const calendar = google.calendar({ version: 'v3', auth });
 
-    const busyTimes = response.data.calendars.primary.busy || [];
-    return busyTimes;
+  const { data } = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      items: [{ id: 'primary' }],
+    },
+  });
 
-  } catch (error) {
-    console.error('Error fetching busy times:', error.response?.data || error.message);
-    throw error;
-  }
+  const busy =
+    data?.calendars?.primary?.busy?.map((b) => ({ start: b.start, end: b.end })) || [];
+  return busy;
 }
 
 /**
- * Create calendar event with Google Meet
+ * Create an event on the authenticated user's primary calendar.
+ * Pass eventData like:
+ * {
+ *   summary, description,
+ *   start: { dateTime, timeZone: 'UTC' },
+ *   end: { dateTime, timeZone: 'UTC' },
+ *   attendees: [{email}, ...],
+ *   conferenceData: { createRequest: { requestId, conferenceSolutionKey: { type: 'hangoutsMeet' } } },
+ *   reminders: { useDefault: false, overrides: [...] }
+ * }
  */
-async function createCalendarEvent(accessToken, event) {
-  try {
-    const response = await axios.post(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1',
-      event,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+async function createCalendarEvent(accessToken, eventData) {
+  const auth = getOAuth2Client();
+  auth.setCredentials({ access_token: accessToken });
+  const calendar = google.calendar({ version: 'v3', auth });
 
-    return response.data;
+  const { data } = await calendar.events.insert({
+    calendarId: 'primary',
+    requestBody: eventData,
+    conferenceDataVersion: 1,
+  });
 
-  } catch (error) {
-    console.error('Error creating calendar event:', error.response?.data || error.message);
-    throw error;
-  }
+  return data; // contains id, htmlLink, hangoutLink, conferenceData, ...
 }
 
 module.exports = {
   getAuthUrl,
   getTokensFromCode,
-  getTokens,  // Alias for backward compatibility
   getUserInfo,
-  getCalendarList,
-  refreshAccessToken,
-  getBusyTimes,        // Phase 2
-  createCalendarEvent  // Phase 2
+  getBusyTimes,
+  createCalendarEvent,
 };
