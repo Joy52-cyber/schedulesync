@@ -1,8 +1,7 @@
-﻿// server.js — ScheduleSync (cleaned with fixes)
+﻿// server.js — ScheduleSync (Railway base URL + fixes)
 // -----------------------------------------------------------------------------
-// Loads env, initializes DB, defines routes (auth, teams, members, availability
-// requests), and starts the server with graceful shutdown. Optional Google OAuth
-// is supported if google-auth-service.js is present.
+// Uses Railway domain for all public links, supports owner auto-select, has
+// back-compat Send Request endpoint, and optional Google OAuth hooks.
 // -----------------------------------------------------------------------------
 
 require('dotenv').config();
@@ -41,9 +40,13 @@ const clean = (v) => (v || '').toString().trim();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = clean(process.env.JWT_SECRET) || 'schedulesync-secret-2025';
 
+// *** Force Railway domain for all public links used in emails/buttons ***
+const PUBLIC_BASE_URL = clean(process.env.APP_URL) || 'https://schedulesync-production.up.railway.app';
+
 // DB: prefer DB_CONNECTION_STRING, fall back to DATABASE_URL
 const connectionString = process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL;
 console.log('🔍 DB Connection:', connectionString ? connectionString.substring(0, 90) + '…' : '❌ none');
+console.log('🔗 Public Base URL for links:', PUBLIC_BASE_URL);
 
 const pool = new Pool({
   connectionString,
@@ -102,7 +105,7 @@ app.use(express.static('public'));
 app.get('/health', (_req, res) => res.status(200).json({ status: 'healthy' }));
 app.get('/api/status', async (_req, res) => {
   const dbOk = await pool.query('SELECT 1').then(() => true).catch(() => false);
-  res.json({ status: 'ScheduleSync API Running', config: { google: !!googleAuth, database: dbOk } });
+  res.json({ status: 'ScheduleSync API Running', config: { google: !!googleAuth, database: dbOk, baseUrl: PUBLIC_BASE_URL } });
 });
 
 // ----------------------------------------------------------------------------
@@ -186,7 +189,10 @@ async function initDatabase() {
       booked_time VARCHAR(50),
       booking_id INTEGER REFERENCES bookings(id),
       expires_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMP DEFAULT NOW(),
+      guest_google_access_token TEXT,
+      guest_google_refresh_token TEXT,
+      guest_google_email VARCHAR(255)
     )`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS guest_availability_slots (
@@ -286,7 +292,7 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
       [name, description || '', req.userId, Math.random().toString(36).slice(2)]
     );
 
-    // Optional: ensure owner appears in members list
+    // Ensure owner appears in members list
     await pool.query(
       `INSERT INTO team_members (team_id, user_id, role)
        VALUES ($1, $2, 'owner')
@@ -477,9 +483,7 @@ app.post('/api/availability-requests', authenticateToken, async (req, res) => {
       )
       .then((r) => r.rows[0]);
 
-    // Always use your Railway domain for email and booking links
-const base = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
-      const bookingUrl = `${base}/availability-request/${token}`;
+    const bookingUrl = `${PUBLIC_BASE_URL}/availability-request/${token}`;
 
     if (emailService?.sendAvailabilityRequest) {
       emailService
@@ -504,8 +508,6 @@ app.post('/api/booking-request/create', authenticateToken, async (req, res) => {
       .then((r) => r.rows[0]);
     if (!team) return res.status(403).json({ error: 'Team not found or access denied' });
 
-    // Always use your Railway domain for email and booking links
-const base = process.env.APP_URL || 'https://schedulesync-production.up.railway.app';
     const toCreate = Array.isArray(recipients) && recipients.length
       ? recipients
       : [{ name: guest_name, email: guest_email, notes: guest_notes }];
@@ -522,7 +524,7 @@ const base = process.env.APP_URL || 'https://schedulesync-production.up.railway.
         )
         .then((q) => q.rows[0]);
 
-      const url = `${base}/availability-request/${token}`;
+      const url = `${PUBLIC_BASE_URL}/availability-request/${token}`;
 
       if (emailService?.sendAvailabilityRequest) {
         emailService
@@ -687,6 +689,39 @@ app.post('/api/availability-requests/:token/book', async (req, res) => {
       [date, time, booking.id, request.id]
     );
 
+    // (Optional) create Google Calendar event if owner connected — plug your service here
+    try {
+      if (googleAuth?.createCalendarEvent) {
+        const owner = await pool
+          .query('SELECT id, name, email, timezone, google_access_token, google_refresh_token FROM users WHERE id=$1', [request.owner_id])
+          .then(r => r.rows[0]);
+        if (owner?.google_access_token) {
+          const startISO = new Date(booking.slot_start).toISOString();
+          const endISO   = new Date(booking.slot_end).toISOString();
+          const eventInput = {
+            summary: `Meeting: ${request.guest_name || request.guest_email}`,
+            description: `Scheduled via ScheduleSync. Team ${request.team_id}, Booking ${booking.id}`,
+            start: { dateTime: startISO },
+            end:   { dateTime: endISO },
+            attendees: [{ email: request.guest_email }],
+            conferencing: 'google_meet'
+          };
+          const created = await googleAuth.createCalendarEvent({
+            access_token: owner.google_access_token,
+            refresh_token: owner.google_refresh_token
+          }, eventInput);
+          if (created) {
+            await pool.query(
+              `UPDATE bookings SET calendar_event_id=$1, meet_link=$2 WHERE id=$3`,
+              [created.id || null, created.meetLink || created.hangoutLink || null, booking.id]
+            );
+          }
+        }
+      }
+    } catch (calErr) {
+      console.error('Calendar create error (non-fatal):', calErr);
+    }
+
     if (emailService) {
       const team = await pool.query('SELECT * FROM teams WHERE id=$1', [request.team_id]).then((r) => r.rows[0]);
       if (team) {
@@ -729,7 +764,6 @@ async function calculateOverlap(teamId, requestId) {
       const guestSlots = guestAvailability.filter((s) => s.day_of_week === day);
       if (!ownerSlots.length || !guestSlots.length) continue;
 
-      // For simplicity, consider first slot of each list
       const ownerSlot = ownerSlots[0];
       const guestSlot = guestSlots[0];
 
