@@ -1,0 +1,461 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Your Availability - ScheduleSync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        .time-slot-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .time-slot-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        .time-slot-card.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8 mt-4">
+            <div class="text-6xl mb-4">📅</div>
+            <h1 class="text-4xl font-bold text-white mb-2" id="pageTitle">Schedule a Meeting</h1>
+            <p class="text-purple-200 text-lg" id="pageSubtitle">Connect your calendar to find mutual availability</p>
+        </div>
+
+        <!-- Main Content Card -->
+        <div class="glass rounded-2xl p-8 shadow-2xl">
+            
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                <p class="text-red-700 font-medium" id="errorText"></p>
+            </div>
+
+            <!-- Success Message -->
+            <div id="successMessage" class="hidden mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-lg">
+                <p class="text-green-700 font-medium" id="successText"></p>
+            </div>
+
+            <!-- Step 1: Request Details -->
+            <div id="step1" class="mb-8">
+                <div class="bg-purple-50 rounded-lg p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-2" id="teamName">Loading...</h2>
+                    <p class="text-gray-600" id="teamDescription"></p>
+                    <div class="mt-4 flex items-center gap-2">
+                        <span class="text-gray-700 font-medium">Meeting with:</span>
+                        <span class="text-purple-600 font-semibold" id="ownerName">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Connect Google Calendar -->
+            <div id="step2">
+                <div class="text-center mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-3">Connect Your Google Calendar</h3>
+                    <p class="text-gray-600 mb-6">
+                        We'll automatically find times that work for both of you based on your calendar availability.
+                    </p>
+                </div>
+
+                <!-- Not Connected State -->
+                <div id="notConnectedState" class="hidden">
+                    <button 
+                        onclick="connectGoogleCalendar()" 
+                        id="connectBtn"
+                        class="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-800 font-semibold py-4 px-6 rounded-lg hover:bg-gray-50 hover:border-purple-500 transition"
+                    >
+                        <svg class="w-8 h-8" viewBox="0 0 48 48">
+                            <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
+                            <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
+                            <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
+                            <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+                        </svg>
+                        <span>Connect Google Calendar</span>
+                    </button>
+
+                    <div class="mt-6 bg-blue-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-2">Why connect your calendar?</h4>
+                        <ul class="space-y-2 text-sm text-gray-700">
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-500 mt-1">✓</span>
+                                <span>Automatically find times that work for both calendars</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-500 mt-1">✓</span>
+                                <span>Meeting instantly added to your calendar</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-500 mt-1">✓</span>
+                                <span>Google Meet link created automatically</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-500 mt-1">✓</span>
+                                <span>Your calendar data is never stored</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Connected State -->
+                <div id="connectedState" class="hidden">
+                    <div class="bg-green-50 border-2 border-green-500 rounded-lg p-6 mb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">✓</span>
+                            <div>
+                                <p class="text-green-800 font-semibold">Google Calendar Connected!</p>
+                                <p class="text-green-700 text-sm" id="connectedEmail"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button 
+                        onclick="findAvailableTimes()" 
+                        id="findTimesBtn"
+                        class="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white font-semibold py-4 px-6 rounded-lg hover:from-purple-700 hover:to-purple-800 transition"
+                    >
+                        Find Available Times
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="hidden text-center py-12">
+                    <div class="loading-spinner mx-auto mb-4"></div>
+                    <p class="text-gray-600 font-medium">Finding available times...</p>
+                    <p class="text-gray-500 text-sm mt-2">This may take a moment</p>
+                </div>
+            </div>
+
+            <!-- Step 3: Select Time Slot -->
+            <div id="step3" class="hidden">
+                <div class="text-center mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Select a Time</h3>
+                    <p class="text-gray-600" id="slotsCount">We found several times that work for both of you!</p>
+                </div>
+
+                <!-- Time Slots Grid -->
+                <div id="timeSlotsGrid" class="space-y-6">
+                    <!-- Time slots will be populated here -->
+                </div>
+
+                <div class="mt-6">
+                    <button 
+                        onclick="goBack()" 
+                        class="text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                        ← Back
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Confirm Booking -->
+            <div id="step4" class="hidden">
+                <div class="text-center mb-8">
+                    <div class="text-6xl mb-4">🎉</div>
+                    <h3 class="text-3xl font-bold text-gray-800 mb-3">Meeting Booked!</h3>
+                    <p class="text-gray-600 mb-6">Your meeting has been scheduled and added to both calendars.</p>
+                </div>
+
+                <div class="bg-purple-50 rounded-lg p-6 mb-6">
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-gray-600 text-sm">Date & Time</p>
+                            <p class="text-gray-800 font-semibold text-lg" id="confirmedDateTime"></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600 text-sm">Duration</p>
+                            <p class="text-gray-800 font-semibold">60 minutes</p>
+                        </div>
+                        <div id="meetLinkSection" class="hidden">
+                            <p class="text-gray-600 text-sm">Google Meet Link</p>
+                            <a href="#" id="meetLink" target="_blank" class="text-purple-600 hover:text-purple-700 font-semibold break-all">
+                                <!-- Meet link will be populated here -->
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <p class="text-blue-800 text-sm">
+                        📧 A calendar invite has been sent to your email with all the details.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const token = window.location.pathname.split('/').pop();
+        let requestData = null;
+        let availableSlots = [];
+        let selectedSlot = null;
+
+        // Check URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('google_connected') === 'true') {
+            showSuccess('Google Calendar connected successfully!');
+            setTimeout(() => {
+                checkGoogleStatus();
+            }, 1000);
+        } else if (urlParams.get('error')) {
+            showError('Failed to connect Google Calendar. Please try again.');
+        }
+
+        // Initialize page
+        async function init() {
+            await loadRequestDetails();
+            await checkGoogleStatus();
+        }
+
+        async function loadRequestDetails() {
+            try {
+                const response = await fetch(`/api/availability-requests/${token}`);
+                if (!response.ok) throw new Error('Request not found');
+
+                const data = await response.json();
+                requestData = data.request;
+
+                document.getElementById('teamName').textContent = requestData.team_name;
+                document.getElementById('teamDescription').textContent = requestData.team_description || '';
+                document.getElementById('ownerName').textContent = requestData.owner_name;
+            } catch (error) {
+                console.error('Error loading request:', error);
+                showError('Failed to load request details');
+            }
+        }
+
+        async function checkGoogleStatus() {
+            try {
+                const response = await fetch(`/api/availability-requests/${token}/google-status`);
+                const data = await response.json();
+
+                if (data.guestConnected) {
+                    document.getElementById('notConnectedState').classList.add('hidden');
+                    document.getElementById('connectedState').classList.remove('hidden');
+                    document.getElementById('connectedEmail').textContent = data.guestEmail;
+                } else {
+                    document.getElementById('notConnectedState').classList.remove('hidden');
+                    document.getElementById('connectedState').classList.add('hidden');
+                }
+
+                if (!data.ownerConnected) {
+                    showError('The organizer has not connected their Google Calendar yet. Please check back later.');
+                }
+            } catch (error) {
+                console.error('Error checking Google status:', error);
+                document.getElementById('notConnectedState').classList.remove('hidden');
+            }
+        }
+
+        async function connectGoogleCalendar() {
+            try {
+                const btn = document.getElementById('connectBtn');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading-spinner inline-block w-6 h-6 mr-2"></span> Connecting...';
+
+                const response = await fetch(`/api/availability-requests/${token}/connect-google`);
+                const data = await response.json();
+
+                if (data.authUrl) {
+                    window.location.href = data.authUrl;
+                } else {
+                    throw new Error('No auth URL received');
+                }
+            } catch (error) {
+                console.error('Error connecting Google:', error);
+                showError('Failed to initiate Google Calendar connection');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('connectBtn').innerHTML = '<svg class="w-8 h-8" viewBox="0 0 48 48">...</svg><span>Connect Google Calendar</span>';
+            }
+        }
+
+        async function findAvailableTimes() {
+            const btn = document.getElementById('findTimesBtn');
+            btn.disabled = true;
+            btn.textContent = 'Finding times...';
+
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/availability-requests/${token}/calendar-slots?days=14&duration=60`);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to find available times');
+                }
+
+                const data = await response.json();
+                availableSlots = data.slots;
+
+                if (availableSlots.length === 0) {
+                    showError('No mutual availability found in the next 14 days. Please try connecting a different calendar or contact the organizer.');
+                    document.getElementById('loadingState').classList.add('hidden');
+                    document.getElementById('step2').classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Find Available Times';
+                    return;
+                }
+
+                displayTimeSlots(data.groupedByDate);
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('step3').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error finding times:', error);
+                showError(error.message || 'Failed to find available times');
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('step2').classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Find Available Times';
+            }
+        }
+
+        function displayTimeSlots(groupedSlots) {
+            const grid = document.getElementById('timeSlotsGrid');
+            grid.innerHTML = '';
+
+            document.getElementById('slotsCount').textContent = `We found ${availableSlots.length} available times!`;
+
+            Object.keys(groupedSlots).forEach(date => {
+                const dateSection = document.createElement('div');
+                dateSection.innerHTML = `
+                    <h4 class="font-bold text-gray-800 mb-3">${date}</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="slots-${date.replace(/\W/g, '')}">
+                    </div>
+                `;
+                grid.appendChild(dateSection);
+
+                const slotsContainer = dateSection.querySelector(`#slots-${date.replace(/\W/g, '')}`);
+                
+                groupedSlots[date].forEach(slot => {
+                    const card = document.createElement('div');
+                    card.className = 'time-slot-card bg-white border-2 border-gray-200 rounded-lg p-3 text-center';
+                    card.innerHTML = `
+                        <div class="font-semibold text-gray-800">${slot.time}</div>
+                        <div class="text-xs text-gray-500">${slot.duration} min</div>
+                    `;
+                    card.onclick = () => selectTimeSlot(slot, card);
+                    slotsContainer.appendChild(card);
+                });
+            });
+        }
+
+        function selectTimeSlot(slot, cardElement) {
+            // Remove previous selection
+            document.querySelectorAll('.time-slot-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            // Mark new selection
+            cardElement.classList.add('selected');
+            selectedSlot = slot;
+
+            // Auto-proceed to booking
+            setTimeout(() => bookMeeting(), 500);
+        }
+
+        async function bookMeeting() {
+            if (!selectedSlot) return;
+
+            try {
+                document.getElementById('step3').classList.add('hidden');
+                document.getElementById('loadingState').classList.remove('hidden');
+
+                const response = await fetch(`/api/availability-requests/${token}/book-calendar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        startTime: selectedSlot.startISO,
+                        endTime: selectedSlot.endISO
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to book meeting');
+                }
+
+                const data = await response.json();
+                
+                // Show success
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('step4').classList.remove('hidden');
+                document.getElementById('confirmedDateTime').textContent = `${selectedSlot.date} at ${selectedSlot.time}`;
+                
+                if (data.booking.meetLink) {
+                    document.getElementById('meetLinkSection').classList.remove('hidden');
+                    const meetLinkElem = document.getElementById('meetLink');
+                    meetLinkElem.href = data.booking.meetLink;
+                    meetLinkElem.textContent = data.booking.meetLink;
+                }
+
+            } catch (error) {
+                console.error('Error booking meeting:', error);
+                showError(error.message || 'Failed to book the meeting');
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('step3').classList.remove('hidden');
+            }
+        }
+
+        function goBack() {
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+            document.getElementById('findTimesBtn').disabled = false;
+            document.getElementById('findTimesBtn').textContent = 'Find Available Times';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = '✗ ' + message;
+            errorDiv.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            setTimeout(() => {
+                errorDiv.classList.add('hidden');
+            }, 8000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            const successText = document.getElementById('successText');
+            successText.textContent = '✓ ' + message;
+            successDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                successDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
