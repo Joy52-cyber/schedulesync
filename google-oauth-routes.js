@@ -4,6 +4,23 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const googleAuthService = require('./google-auth-service');
 
+// GET /api/auth/google  →  Returns the Google OAuth URL to the frontend
+router.get('/google', async (req, res) => {
+  try {
+    const { token, state } = req.query;
+    const authUrl = require('./google-auth-service').getAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      state: state || (token ? `guest-${token}` : undefined)
+    });
+    res.json({ authUrl });
+  } catch (err) {
+    console.error('Error generating Google auth URL:', err);
+    res.status(500).json({ error: 'Failed to generate Google auth URL' });
+  }
+});
+
+
 // GET /api/auth/google/callback
 router.get('/google/callback', async (req, res) => {
   const { code, error, state } = req.query;
