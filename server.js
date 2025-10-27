@@ -1,6 +1,6 @@
-﻿// server.js — ScheduleSync (cleaned, consolidated)
+﻿// server.js — ScheduleSync (cleaned with fixes)
 // -----------------------------------------------------------------------------
-// Loads env, initializes DB, defines routes (auth, teams, bookings, availability
+// Loads env, initializes DB, defines routes (auth, teams, members, availability
 // requests), and starts the server with graceful shutdown. Optional Google OAuth
 // is supported if google-auth-service.js is present.
 // -----------------------------------------------------------------------------
@@ -22,16 +22,16 @@ let emailService = null;
 try {
   emailService = require('./email-service');
   console.log('✅ Email service loaded');
-} catch (e) {
-  console.log('ℹ️  Email service not found - emails will be disabled');
+} catch {
+  console.log('ℹ️  Email service not found — emails disabled');
 }
 
 let googleAuth = null;
 try {
   googleAuth = require('./google-auth-service');
   console.log('✅ Google Auth service loaded');
-} catch (e) {
-  console.log('⚠️  Google Auth service not found - OAuth will be disabled');
+} catch {
+  console.log('⚠️  Google Auth service not found — OAuth disabled');
 }
 
 // ----------------------------------------------------------------------------
@@ -53,7 +53,6 @@ const pool = new Pool({
 // Utility: parse date+time to SQL timestamps (UTC) for 60-min meetings by default
 function parseDateAndTimeToTimestamp(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
-
   const parts = String(timeStr).trim().split(/\s+/);
   let h, m;
   if (parts.length >= 2) {
@@ -71,13 +70,11 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
     m = parseInt(mRaw, 10);
     if (isNaN(h) || isNaN(m)) return null;
   }
-
   const hh = String(h).padStart(2, '0');
   const mm = String(m).padStart(2, '0');
   const start = new Date(`${dateStr}T${hh}:${mm}:00Z`);
   if (isNaN(start.getTime())) return null;
   const end = new Date(start.getTime() + 60 * 60000);
-
   const fmt = (d) => {
     const yyyy = d.getUTCFullYear();
     const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -87,7 +84,6 @@ function parseDateAndTimeToTimestamp(dateStr, timeStr) {
     const SS = String(d.getUTCSeconds()).padStart(2, '0');
     return `${yyyy}-${mo}-${dd} ${HH}:${MM}:${SS}`;
   };
-
   return { start: fmt(start), end: fmt(end) };
 }
 
@@ -105,24 +101,14 @@ app.use(express.static('public'));
 // ----------------------------------------------------------------------------
 app.get('/health', (_req, res) => res.status(200).json({ status: 'healthy' }));
 app.get('/api/status', async (_req, res) => {
-  const dbOk = await pool
-    .query('SELECT 1')
-    .then(() => true)
-    .catch(() => false);
-  res.json({
-    status: 'ScheduleSync API Running',
-    config: {
-      google: !!googleAuth,
-      database: dbOk,
-    },
-  });
+  const dbOk = await pool.query('SELECT 1').then(() => true).catch(() => false);
+  res.json({ status: 'ScheduleSync API Running', config: { google: !!googleAuth, database: dbOk } });
 });
 
 // ----------------------------------------------------------------------------
 // DB bootstrap (idempotent migrations)
 // ----------------------------------------------------------------------------
 async function initDatabase() {
-  // users
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -139,8 +125,6 @@ async function initDatabase() {
       booking_preferences JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-
-  // teams
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teams (
       id SERIAL PRIMARY KEY,
@@ -150,8 +134,6 @@ async function initDatabase() {
       public_url VARCHAR(255) UNIQUE,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-
-  // team_members
   await pool.query(`
     CREATE TABLE IF NOT EXISTS team_members (
       id SERIAL PRIMARY KEY,
@@ -161,8 +143,6 @@ async function initDatabase() {
       joined_at TIMESTAMP DEFAULT NOW(),
       UNIQUE(team_id, user_id)
     )`);
-
-  // time_slots (owner availability)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS time_slots (
       id SERIAL PRIMARY KEY,
@@ -176,8 +156,6 @@ async function initDatabase() {
       slot_end TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-
-  // bookings
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
       id SERIAL PRIMARY KEY,
@@ -195,8 +173,6 @@ async function initDatabase() {
       status VARCHAR(50) DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-
-  // availability flow (owner invites guest to provide availability)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS availability_requests (
       id SERIAL PRIMARY KEY,
@@ -212,7 +188,6 @@ async function initDatabase() {
       expires_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )`);
-
   await pool.query(`
     CREATE TABLE IF NOT EXISTS guest_availability_slots (
       id SERIAL PRIMARY KEY,
@@ -251,7 +226,7 @@ function authenticateToken(req, res, next) {
 }
 
 // ----------------------------------------------------------------------------
-// Basic auth (email/password) — minimal demo
+// Basic auth (email/password)
 // ----------------------------------------------------------------------------
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -274,23 +249,18 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
-
     const out = await pool.query('SELECT id,name,email,password FROM users WHERE email=$1', [email]);
     if (!out.rowCount) return res.status(401).json({ error: 'No account found with this email address', type: 'email_not_found' });
-
     const user = out.rows[0];
     let passwordValid = false;
     if (user.password?.startsWith('$2b$')) passwordValid = await bcrypt.compare(password, user.password);
     else passwordValid = user.password === password; // legacy plain text
-
     if (!passwordValid) return res.status(401).json({ error: 'Incorrect password', type: 'wrong_password' });
 
-    // upgrade legacy password to bcrypt
     if (!user.password?.startsWith('$2b$')) {
       const hashed = await bcrypt.hash(password, 10);
       await pool.query('UPDATE users SET password=$1 WHERE id=$2', [hashed, user.id]);
     }
-
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, token, user: { id: user.id, name: user.name, email: user.email } });
   } catch (e) {
@@ -305,7 +275,7 @@ app.get('/api/users/me', authenticateToken, async (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// Teams (owner-scoped minimal endpoints)
+// Teams & Members
 // ----------------------------------------------------------------------------
 app.post('/api/teams', authenticateToken, async (req, res) => {
   try {
@@ -315,33 +285,142 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
        VALUES ($1,$2,$3,$4) RETURNING *`,
       [name, description || '', req.userId, Math.random().toString(36).slice(2)]
     );
+
+    // Optional: ensure owner appears in members list
+    await pool.query(
+      `INSERT INTO team_members (team_id, user_id, role)
+       VALUES ($1, $2, 'owner')
+       ON CONFLICT DO NOTHING`,
+      [result.rows[0].id, req.userId]
+    );
+
     res.status(201).json({ team: result.rows[0] });
   } catch (e) {
     res.status(500).json({ error: 'Failed to create team' });
   }
 });
 
+// List teams the current user can access (owner OR member)
+app.get('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req;
+    const { rows } = await pool.query(
+      `
+      SELECT
+        t.*,
+        u.name  AS owner_name,
+        u.email AS owner_email,
+        COUNT(tm2.id) AS member_count,
+        CASE WHEN t.owner_id = $1 THEN true ELSE false END AS is_owner,
+        COALESCE((
+          SELECT role FROM team_members tm
+          WHERE tm.team_id = t.id AND tm.user_id = $1
+          LIMIT 1
+        ), CASE WHEN t.owner_id = $1 THEN 'owner' ELSE NULL END) AS my_role
+      FROM teams t
+      JOIN users u ON u.id = t.owner_id
+      LEFT JOIN team_members tm2 ON tm2.team_id = t.id
+      WHERE t.owner_id = $1
+         OR EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id AND tm.user_id = $1)
+      GROUP BY t.id, u.name, u.email
+      ORDER BY is_owner DESC, t.created_at DESC
+      `,
+      [userId]
+    );
+    res.json({ teams: rows });
+  } catch (e) {
+    console.error('Error listing teams:', e);
+    res.status(500).json({ error: 'Failed to list teams' });
+  }
+});
+
+// Team details if requester is owner OR member
 app.get('/api/teams/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      `SELECT t.*, u.name AS owner_name, u.email AS owner_email, COUNT(tm.id) AS member_count
-       FROM teams t
-       JOIN users u ON t.owner_id = u.id
-       LEFT JOIN team_members tm ON t.id = tm.team_id
-       WHERE t.id = $1 AND t.owner_id = $2
-       GROUP BY t.id, u.name, u.email`,
-      [id, req.userId]
+    const { userId } = req;
+
+    const { rows } = await pool.query(
+      `
+      SELECT
+        t.*,
+        u.name  AS owner_name,
+        u.email AS owner_email,
+        COUNT(tm2.id) AS member_count,
+        CASE WHEN t.owner_id = $2 THEN true ELSE false END AS is_owner,
+        COALESCE((
+          SELECT role FROM team_members tm
+          WHERE tm.team_id = t.id AND tm.user_id = $2
+          LIMIT 1
+        ), CASE WHEN t.owner_id = $2 THEN 'owner' ELSE NULL END) AS my_role
+      FROM teams t
+      JOIN users u ON t.owner_id = u.id
+      LEFT JOIN team_members tm2 ON tm2.team_id = t.id
+      WHERE t.id = $1
+        AND (
+          t.owner_id = $2
+          OR EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id AND tm.user_id = $2)
+        )
+      GROUP BY t.id, u.name, u.email
+      `,
+      [id, userId]
     );
-    if (!result.rowCount) return res.status(404).json({ error: 'Team not found' });
-    res.json({ team: result.rows[0] });
+
+    if (!rows.length) return res.status(404).json({ error: 'Team not found or access denied' });
+    res.json({ team: rows[0] });
   } catch (e) {
+    console.error('Error fetching team:', e);
     res.status(500).json({ error: 'Failed to fetch team' });
   }
 });
 
+// Team members — owner first and flagged via owner_id
+app.get('/api/teams/:id/members', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
 
-// Owner availability CRUD (very simple: replace owner slots for a team)
+    const allowed = await pool.query(
+      `
+      SELECT 1
+      FROM teams t
+      WHERE t.id = $1 AND (
+        t.owner_id = $2 OR EXISTS (
+          SELECT 1 FROM team_members tm WHERE tm.team_id = t.id AND tm.user_id = $2
+        )
+      )
+      `,
+      [id, req.userId]
+    );
+    if (!allowed.rowCount) return res.status(403).json({ error: 'Access denied' });
+
+    const owner = await pool.query(
+      `SELECT u.id, u.name, u.email, 'owner' as role
+       FROM teams t JOIN users u ON u.id = t.owner_id
+       WHERE t.id = $1`,
+      [id]
+    );
+
+    const members = await pool.query(
+      `SELECT u.id, u.name, u.email, tm.role
+       FROM team_members tm JOIN users u ON u.id = tm.user_id
+       WHERE tm.team_id = $1
+       ORDER BY u.name ASC`,
+      [id]
+    );
+
+    const dedup = new Map();
+    [...owner.rows, ...members.rows].forEach(m => dedup.set(m.id, m));
+    const list = Array.from(dedup.values());
+    const ownerId = owner.rows[0]?.id;
+
+    res.json({ members: list, owner_id: ownerId });
+  } catch (e) {
+    console.error('Error listing members:', e);
+    res.status(500).json({ error: 'Failed to list members' });
+  }
+});
+
+// Owner availability CRUD
 app.post('/api/teams/:id/availability', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -378,13 +457,8 @@ app.get('/api/teams/:id/availability', authenticateToken, async (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// Availability Requests (owner invites guest to offer times; guest submits)
+// Availability Requests (owner invites guest; guest submits)
 // ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// Availability Requests (owner invites guest to offer times; guest submits)
-// ----------------------------------------------------------------------------
-
-// Create availability request (new flow)
 app.post('/api/availability-requests', authenticateToken, async (req, res) => {
   try {
     const { team_id, guest_name, guest_email, guest_notes } = req.body;
@@ -631,9 +705,8 @@ app.post('/api/availability-requests/:token/book', async (req, res) => {
   }
 });
 
-
 // ----------------------------------------------------------------------------
-// Guest page (pretty path) — serves public/availability-request-guest.html
+// Guest page (pretty path)
 // ----------------------------------------------------------------------------
 app.get('/availability-request/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'availability-request-guest.html'));
